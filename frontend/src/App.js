@@ -5,6 +5,7 @@ import Login from '@/pages/Login';
 import Dashboard from '@/pages/Dashboard';
 import InvoiceList from '@/pages/InvoiceList';
 import VerifyInvoice from '@/pages/VerifyInvoice';
+import Reports from '@/pages/Reports';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import '@/App.css';
 
@@ -17,6 +18,7 @@ function App() {
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/invoices" element={<ProtectedRoute><InvoiceList /></ProtectedRoute>} />
           <Route path="/verify/:id" element={<ProtectedRoute><VerifyInvoice /></ProtectedRoute>} />
+          <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
