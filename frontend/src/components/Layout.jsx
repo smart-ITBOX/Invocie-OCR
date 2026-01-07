@@ -15,11 +15,15 @@ export default function Layout({ children }) {
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [companySettings, setCompanySettings] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const isAdmin = user.role === 'admin';
 
   useEffect(() => {
-    loadCompanySettings();
+    // Only load company settings for non-admin users
+    if (!isAdmin) {
+      loadCompanySettings();
+    }
     loadUserProfile();
-  }, []);
+  }, [isAdmin]);
 
   const loadCompanySettings = async () => {
     try {
@@ -62,7 +66,7 @@ export default function Layout({ children }) {
             <div className="flex items-center gap-8">
               {/* Company Logo and Name */}
               <div className="flex items-center gap-3" data-testid="app-logo">
-                {companySettings?.company_logo ? (
+                {!isAdmin && companySettings?.company_logo ? (
                   <div className="w-16 h-16 rounded-md p-2 flex items-center justify-center shadow-xl" style={{ background: 'rgba(255, 255, 255, 0.98)' }}>
                     <img 
                       src={companySettings.company_logo} 
@@ -74,24 +78,31 @@ export default function Layout({ children }) {
                 ) : (
                   <div className="w-16 h-16 bg-[#FFD700] rounded-md flex items-center justify-center shadow-xl">
                     <span className="text-3xl font-bold text-[#0B2B5C]">
-                      {companySettings?.company_name?.charAt(0) || 'S'}
+                      {isAdmin ? 'A' : (companySettings?.company_name?.charAt(0) || 'S')}
                     </span>
                   </div>
                 )}
                 <div>
                   <div className="font-manrope font-bold text-xl tracking-tight leading-tight">
-                    {companySettings?.company_name || (
+                    {isAdmin ? (
                       <>
                         <span className="text-white">SMART</span>
                         <span className="text-[#FFD700]"> ITBOX</span>
                       </>
+                    ) : (
+                      companySettings?.company_name || (
+                        <>
+                          <span className="text-white">SMART</span>
+                          <span className="text-[#FFD700]"> ITBOX</span>
+                        </>
+                      )
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
                     <Badge variant="secondary" className="bg-[#FFD700] text-[#0B2B5C] text-xs font-semibold px-2 py-0.5 hover:bg-[#FFD700]">
-                      Invoice Manager
+                      {isAdmin ? 'Admin Panel' : 'Invoice Manager'}
                     </Badge>
-                    {companySettings?.company_gst_no && (
+                    {!isAdmin && companySettings?.company_gst_no && (
                       <span className="text-[10px] text-white/70 font-mono">
                         GST: {companySettings.company_gst_no.slice(0, 10)}...
                       </span>
@@ -101,67 +112,86 @@ export default function Layout({ children }) {
               </div>
               
               <div className="hidden md:flex gap-2 ml-4">
-                <button
-                  onClick={() => navigate('/')}
-                  data-testid="nav-dashboard-btn"
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
-                    location.pathname === '/' 
-                      ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <Home size={18} />
-                  Dashboard
-                </button>
-                <button
-                  onClick={() => navigate('/invoices')}
-                  data-testid="nav-invoices-btn"
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
-                    location.pathname === '/invoices' 
-                      ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <FileText size={18} />
-                  All Invoices
-                </button>
-                <button
-                  onClick={() => navigate('/settings')}
-                  data-testid="nav-settings-btn"
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
-                    location.pathname === '/settings' 
-                      ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <SettingsIcon size={18} />
-                  Settings
-                </button>
-                <button
-                  onClick={() => navigate('/reports')}
-                  data-testid="nav-reports-btn"
-                  className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
-                    location.pathname === '/reports' 
-                      ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                      : 'text-white/80 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <BarChart3 size={18} />
-                  Reports
-                </button>
-                {userProfile?.role === 'admin' && (
-                  <button
-                    onClick={() => navigate('/admin')}
-                    data-testid="nav-admin-btn"
-                    className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
-                      location.pathname === '/admin' 
-                        ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                        : 'text-white/80 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    <Shield size={18} />
-                    Admin
-                  </button>
+                {/* Admin Navigation - Only Admin Panel and Reports */}
+                {isAdmin ? (
+                  <>
+                    <button
+                      onClick={() => navigate('/admin')}
+                      data-testid="nav-admin-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                        location.pathname === '/admin' 
+                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <Shield size={18} />
+                      User Management
+                    </button>
+                    <button
+                      onClick={() => navigate('/admin/reports')}
+                      data-testid="nav-admin-reports-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                        location.pathname === '/admin/reports' 
+                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <BarChart3 size={18} />
+                      All Invoices
+                    </button>
+                  </>
+                ) : (
+                  /* Regular User Navigation */
+                  <>
+                    <button
+                      onClick={() => navigate('/')}
+                      data-testid="nav-dashboard-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                        location.pathname === '/' 
+                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <Home size={18} />
+                      Dashboard
+                    </button>
+                    <button
+                      onClick={() => navigate('/invoices')}
+                      data-testid="nav-invoices-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                        location.pathname === '/invoices' 
+                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <FileText size={18} />
+                      All Invoices
+                    </button>
+                    <button
+                      onClick={() => navigate('/settings')}
+                      data-testid="nav-settings-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                        location.pathname === '/settings' 
+                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <SettingsIcon size={18} />
+                      Settings
+                    </button>
+                    <button
+                      onClick={() => navigate('/reports')}
+                      data-testid="nav-reports-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                        location.pathname === '/reports' 
+                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <BarChart3 size={18} />
+                      Reports
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -181,14 +211,10 @@ export default function Layout({ children }) {
                     <User size={16} className="mr-2" />
                     My Profile
                   </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate('/settings')}>
-                    <SettingsIcon size={16} className="mr-2" />
-                    Company Settings
-                  </DropdownMenuItem>
-                  {userProfile?.role === 'admin' && (
-                    <DropdownMenuItem onClick={() => navigate('/admin')}>
-                      <Shield size={16} className="mr-2" />
-                      Admin Panel
+                  {!isAdmin && (
+                    <DropdownMenuItem onClick={() => navigate('/settings')}>
+                      <SettingsIcon size={16} className="mr-2" />
+                      Company Settings
                     </DropdownMenuItem>
                   )}
                   <DropdownMenuSeparator />
