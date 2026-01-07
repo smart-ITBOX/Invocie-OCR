@@ -7,6 +7,8 @@ import InvoiceList from '@/pages/InvoiceList';
 import VerifyInvoice from '@/pages/VerifyInvoice';
 import Reports from '@/pages/Reports';
 import Settings from '@/pages/Settings';
+import Profile from '@/pages/Profile';
+import AdminDashboard from '@/pages/AdminDashboard';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import '@/App.css';
 
@@ -21,6 +23,8 @@ function App() {
           <Route path="/verify/:id" element={<ProtectedRoute><VerifyInvoice /></ProtectedRoute>} />
           <Route path="/reports" element={<ProtectedRoute><Reports /></ProtectedRoute>} />
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
