@@ -131,7 +131,7 @@ export default function Reports() {
     );
   }
 
-  if (months.length === 0) {
+  if (months.length === 0 && !financialData?.monthly_data?.length) {
     return (
       <Layout>
         <div className="space-y-6" data-testid="reports-page">
@@ -155,6 +155,25 @@ export default function Reports() {
     );
   }
 
+  // Prepare chart data
+  const chartData = financialData?.monthly_data?.map(m => ({
+    month: formatMonth(m.month),
+    Purchase: Math.round(m.purchase_amount),
+    Sales: Math.round(m.sales_amount),
+    'Purchase GST': Math.round(m.purchase_gst),
+    'Sales GST': Math.round(m.sales_gst)
+  })) || [];
+
+  const pieDataAmounts = [
+    { name: 'Purchases', value: financialData?.totals?.total_purchase || 0, color: '#EF4444' },
+    { name: 'Sales', value: financialData?.totals?.total_sales || 0, color: '#10B981' }
+  ];
+
+  const pieDataGST = [
+    { name: 'Purchase GST', value: financialData?.totals?.total_purchase_gst || 0, color: '#EF4444' },
+    { name: 'Sales GST', value: financialData?.totals?.total_sales_gst || 0, color: '#10B981' }
+  ];
+
   return (
     <Layout>
       <div className="space-y-6" data-testid="reports-page">
@@ -171,34 +190,54 @@ export default function Reports() {
               Back to Dashboard
             </Button>
             <h1 className="text-3xl font-manrope font-bold text-[#0B2B5C]" data-testid="reports-title">
-              GST Reconciliation Reports
+              Financial Reports & Analytics
             </h1>
-            <p className="text-muted-foreground mt-1">Monthly purchase & sales analysis for CA firms</p>
-          </div>
-          <div className="flex gap-2">
-            <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-              <SelectTrigger className="w-48" data-testid="month-select">
-                <SelectValue placeholder="Select month" />
-              </SelectTrigger>
-              <SelectContent>
-                {months.map(month => (
-                  <SelectItem key={month} value={month}>
-                    {formatMonth(month)}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button
-              onClick={downloadReport}
-              data-testid="download-report-btn"
-              disabled={!report}
-              className="bg-[#10B981] hover:bg-[#10B981]/90 text-white"
-            >
-              <Download size={16} className="mr-2" />
-              Download CSV
-            </Button>
+            <p className="text-muted-foreground mt-1">GST reconciliation and business insights</p>
           </div>
         </div>
+
+        {/* Tabs for different report views */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 max-w-md">
+            <TabsTrigger value="gst" className="flex items-center gap-2">
+              <Calculator size={16} />
+              GST Reports
+            </TabsTrigger>
+            <TabsTrigger value="analytics" className="flex items-center gap-2">
+              <BarChart3 size={16} />
+              Analytics
+            </TabsTrigger>
+          </TabsList>
+
+          {/* GST Reports Tab */}
+          <TabsContent value="gst" className="space-y-6 mt-6">
+            {/* Month Selector and Download */}
+            <div className="flex justify-between items-center">
+              <h2 className="text-xl font-manrope font-semibold text-[#0B2B5C]">GST Reconciliation</h2>
+              <div className="flex gap-2">
+                <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                  <SelectTrigger className="w-48" data-testid="month-select">
+                    <SelectValue placeholder="Select month" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {months.map(month => (
+                      <SelectItem key={month} value={month}>
+                        {formatMonth(month)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  onClick={downloadReport}
+                  data-testid="download-report-btn"
+                  disabled={!report}
+                  className="bg-[#10B981] hover:bg-[#10B981]/90 text-white"
+                >
+                  <Download size={16} className="mr-2" />
+                  Download CSV
+                </Button>
+              </div>
+            </div>
 
         {report && (
           <>
