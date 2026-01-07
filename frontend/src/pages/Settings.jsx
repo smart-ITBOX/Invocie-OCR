@@ -56,10 +56,15 @@ export default function Settings() {
     const file = e.target.files[0];
     if (!file) return;
 
-    // Validate file type
+    // Validate file type - prefer PNG for transparent backgrounds
     if (!file.type.startsWith('image/')) {
       toast.error('Please upload an image file');
       return;
+    }
+
+    // Recommend PNG for transparency
+    if (file.type !== 'image/png') {
+      toast.warning('PNG format recommended for transparent backgrounds');
     }
 
     // Validate file size (max 2MB)
