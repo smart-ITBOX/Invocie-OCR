@@ -216,20 +216,31 @@ async def check_duplicate_invoice(user_id: str, invoice_no: str, invoice_id: Opt
     
     return is_duplicate, duplicate_ids
 
-async def validate_gst_number(user_id: str, invoice_type: str, gst_no: str) -> bool:
-    """Validate GST number against company settings"""
+async def validate_gst_number(user_id: str, invoice_type: str, extracted_data: InvoiceData) -> tuple[bool, str]:
+    """Validate GST number against company settings - returns (is_valid, error_message)"""
     settings = await db.company_settings.find_one({"user_id": user_id}, {"_id": 0})
     
     if not settings or not settings.get('company_gst_no'):
-        return False
+        return False, "Company GST number not configured. Please update Settings first."
     
     company_gst = settings['company_gst_no'].upper().strip()
-    invoice_gst = gst_no.upper().strip() if gst_no else ""
     
     if invoice_type == "purchase":
-        return invoice_gst != company_gst
-    else:
-        return invoice_gst == company_gst
+        # For purchase invoices: Bill To GST (buyer) should be our company GST
+        bill_to_gst = (extracted_data.buyer_gst_no or extracted_data.gst_no or "").upper().strip()
+        if not bill_to_gst:
+            return False, "Bill To GST number not found in invoice"
+        if bill_to_gst != company_gst:
+            return False, f"Invalid Purchase Invoice: Bill To GST ({bill_to_gst}) does not match company GST ({company_gst})"
+        return True, ""
+    else:  # sales
+        # For sales invoices: Bill From GST (supplier) should be our company GST
+        bill_from_gst = (extracted_data.supplier_gst_no or "").upper().strip()
+        if not bill_from_gst:
+            return False, "Bill From GST number not found in invoice"
+        if bill_from_gst != company_gst:
+            return False, f"Invalid Sales Invoice: Bill From GST ({bill_from_gst}) does not match company GST ({company_gst})"
+        return True, ""
 
 async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: str = "purchase") -> tuple[InvoiceData, ConfidenceScores]:
     """Extract invoice data using AI"""
