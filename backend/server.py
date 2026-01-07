@@ -74,11 +74,24 @@ class CompanySettingsUpdate(BaseModel):
 class InvoiceData(BaseModel):
     invoice_no: Optional[str] = None
     invoice_date: Optional[str] = None
+    # Bill From / Supplier Details
     supplier_name: Optional[str] = None
+    supplier_address: Optional[str] = None
+    supplier_gst_no: Optional[str] = None
+    supplier_contact_person: Optional[str] = None
+    supplier_contact_number: Optional[str] = None
+    # Bill To / Buyer Details
+    buyer_name: Optional[str] = None
+    buyer_address: Optional[str] = None
+    buyer_gst_no: Optional[str] = None
+    buyer_contact_person: Optional[str] = None
+    buyer_contact_number: Optional[str] = None
+    # Legacy fields for backward compatibility
     address: Optional[str] = None
     gst_no: Optional[str] = None
     contact_person: Optional[str] = None
     contact_number: Optional[str] = None
+    # Amount fields
     basic_amount: Optional[float] = None
     gst: Optional[float] = None
     total_amount: Optional[float] = None
