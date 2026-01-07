@@ -158,7 +158,7 @@ class UserProfileUpdate(BaseModel):
     new_password: Optional[str] = None
 
 class AdminUserUpdate(BaseModel):
-    role: Optional[str] = None
+    is_active: Optional[bool] = None  # Enable/disable user access
     subscription_valid_until: Optional[str] = None  # ISO date string
 
 class UserResponse(BaseModel):
