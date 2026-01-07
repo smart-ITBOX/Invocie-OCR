@@ -390,8 +390,8 @@ export default function InvoiceList() {
                       <TableHead className="font-bold text-[#0B2B5C]">Type</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C]">Invoice No</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C]">Date</TableHead>
-                      <TableHead className="font-bold text-[#0B2B5C]">Supplier</TableHead>
-                      <TableHead className="font-bold text-[#0B2B5C]">GST No</TableHead>
+                      <TableHead className="font-bold text-[#0B2B5C]">Bill From</TableHead>
+                      <TableHead className="font-bold text-[#0B2B5C]">Bill To</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C] text-right">Amount</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C] text-center">Confidence</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C] text-center">Status</TableHead>
