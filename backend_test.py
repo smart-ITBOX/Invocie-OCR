@@ -192,9 +192,12 @@ class InvoiceAPITester:
             "extracted_data": {
                 "invoice_no": "TEST-001",
                 "invoice_date": "01/01/2024",
-                "supplier_name": "Test Supplier",
-                "address": "Test Address",
-                "gst_no": "TEST123456789",
+                "supplier_name": "Test Supplier Ltd",
+                "supplier_address": "456 Supplier Street",
+                "supplier_gst_no": "27XYZAB9876C1D2",
+                "buyer_name": "Test Company Ltd",
+                "buyer_address": "123 Test Street, Test City",
+                "buyer_gst_no": "29ABCDE1234F1Z5",  # Matches company GST
                 "basic_amount": 1000.0,
                 "gst": 180.0,
                 "total_amount": 1180.0
