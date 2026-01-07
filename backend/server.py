@@ -456,6 +456,10 @@ async def login(credentials: UserLogin):
     if not user_doc:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     
+    # Check if user is disabled
+    if not user_doc.get('is_active', True):
+        raise HTTPException(status_code=403, detail="Your account has been disabled. Please contact administrator.")
+    
     password_hash = user_doc.get('password_hash')
     if not bcrypt.checkpw(credentials.password.encode(), password_hash.encode()):
         raise HTTPException(status_code=401, detail="Invalid credentials")
