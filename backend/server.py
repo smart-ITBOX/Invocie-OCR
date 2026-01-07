@@ -1009,13 +1009,15 @@ async def check_admin(current_user: dict):
 
 @api_router.get("/admin/users")
 async def get_all_users(current_user: dict = Depends(get_current_user)):
-    """Get all users (admin only)"""
+    """Get all users with their company details (admin only)"""
     await check_admin(current_user)
     
     users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
     
-    # Convert datetime fields
+    # Fetch company settings for each user
+    result = []
     for user in users:
+        # Convert datetime fields
         if isinstance(user.get('created_at'), str):
             pass
         elif user.get('created_at'):
@@ -1026,8 +1028,25 @@ async def get_all_users(current_user: dict = Depends(get_current_user)):
                 pass
             else:
                 user['subscription_valid_until'] = user['subscription_valid_until'].isoformat()
+        
+        # Ensure is_active has a default value
+        if 'is_active' not in user:
+            user['is_active'] = True
+        
+        # Get company settings for this user
+        company_settings = await db.company_settings.find_one(
+            {"user_id": user['id']}, 
+            {"_id": 0}
+        )
+        user['company_details'] = company_settings or {}
+        
+        # Get invoice count for this user
+        invoice_count = await db.invoices.count_documents({"user_id": user['id']})
+        user['invoice_count'] = invoice_count
+        
+        result.append(user)
     
-    return users
+    return result
 
 @api_router.get("/admin/users/{user_id}")
 async def get_user_by_id(user_id: str, current_user: dict = Depends(get_current_user)):
