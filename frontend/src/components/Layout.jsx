@@ -14,9 +14,11 @@ export default function Layout({ children }) {
   const location = useLocation();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [companySettings, setCompanySettings] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
 
   useEffect(() => {
     loadCompanySettings();
+    loadUserProfile();
   }, []);
 
   const loadCompanySettings = async () => {
@@ -30,6 +32,18 @@ export default function Layout({ children }) {
       }
     } catch (error) {
       // Settings not configured yet
+    }
+  };
+
+  const loadUserProfile = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/users/me`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setUserProfile(response.data);
+    } catch (error) {
+      // Profile load failed
     }
   };
 
