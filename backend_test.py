@@ -78,6 +78,35 @@ class InvoiceAPITester:
         except Exception as e:
             return self.log_test("User Login", False, f"- Error: {str(e)}")
 
+    def test_company_settings_setup(self):
+        """Test setting up company settings for invoice operations"""
+        if not self.token:
+            return self.log_test("Company Settings Setup", False, "- No authentication token")
+        
+        settings_data = {
+            "company_name": "Test Company Ltd",
+            "company_gst_no": "29ABCDE1234F1Z5",
+            "address": "123 Test Street, Test City",
+            "contact_person": "Test Manager",
+            "contact_number": "+91-9876543210"
+        }
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'}
+            response = requests.post(f"{self.api_url}/settings/company", json=settings_data, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'message' in data:
+                    return self.log_test("Company Settings Setup", True, "- Company settings configured")
+                else:
+                    return self.log_test("Company Settings Setup", False, "- Missing success message")
+            else:
+                return self.log_test("Company Settings Setup", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Company Settings Setup", False, f"- Error: {str(e)}")
+
     def test_invoice_upload(self):
         """Test invoice upload with a sample image"""
         if not self.token:
