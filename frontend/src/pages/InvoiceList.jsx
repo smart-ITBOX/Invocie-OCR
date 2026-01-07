@@ -184,7 +184,7 @@ export default function InvoiceList() {
 
   return (
     <Layout>
-      <div className=\"space-y-6\" data-testid=\"invoice-list-page\">
+      <div className="space-y-6" data-testid="invoice-list-page">
         {/* Header */}
         <div className=\"flex items-center justify-between\">
           <div>
