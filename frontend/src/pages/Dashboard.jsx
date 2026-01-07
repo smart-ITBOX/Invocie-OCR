@@ -6,8 +6,10 @@ import { toast } from 'sonner';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Upload, FileText, CheckCircle, Clock, TrendingUp } from 'lucide-react';
+import { Upload, FileText, CheckCircle, Clock, TrendingUp, ShoppingCart, Receipt } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Progress } from '@/components/ui/progress';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -15,8 +17,13 @@ const API = `${BACKEND_URL}/api`;
 export default function Dashboard() {
   const navigate = useNavigate();
   const [uploading, setUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [recentInvoices, setRecentInvoices] = useState([]);
-  const [stats, setStats] = useState({ pending: 0, verified: 0, total: 0, totalAmount: 0 });
+  const [stats, setStats] = useState({ 
+    pending: 0, verified: 0, total: 0, totalAmount: 0,
+    purchaseInvoices: 0, salesInvoices: 0
+  });
+  const [invoiceType, setInvoiceType] = useState('purchase');
 
   React.useEffect(() => {
     loadDashboardData();
@@ -36,38 +43,75 @@ export default function Dashboard() {
       const verified = invoices.filter(inv => inv.status === 'verified').length;
       const total = invoices.length;
       const totalAmount = invoices.reduce((sum, inv) => sum + (inv.extracted_data?.total_amount || 0), 0);
+      const purchaseInvoices = invoices.filter(inv => inv.invoice_type === 'purchase').length;
+      const salesInvoices = invoices.filter(inv => inv.invoice_type === 'sales').length;
       
-      setStats({ pending, verified, total, totalAmount });
+      setStats({ pending, verified, total, totalAmount, purchaseInvoices, salesInvoices });
     } catch (error) {
       console.error('Error loading dashboard data:', error);
     }
   };
 
   const onDrop = useCallback(async (acceptedFiles) => {
-    const file = acceptedFiles[0];
-    if (!file) return;
+    if (acceptedFiles.length === 0) return;
 
     setUploading(true);
+    setUploadProgress(0);
+
     try {
       const formData = new FormData();
-      formData.append('file', file);
+      
+      if (acceptedFiles.length === 1) {
+        // Single file upload
+        formData.append('file', acceptedFiles[0]);
+        const token = localStorage.getItem('token');
+        const response = await axios.post(
+          `${API}/invoices/upload?invoice_type=${invoiceType}`,
+          formData,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data'
+            }
+          }
+        );
+        toast.success('Invoice uploaded and processed successfully!');
+        navigate(`/verify/${response.data.id}`);
+      } else {
+        // Batch upload
+        acceptedFiles.forEach(file => {
+          formData.append('files', file);
+        });
 
-      const token = localStorage.getItem('token');
-      const response = await axios.post(`${API}/invoices/upload`, formData, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'multipart/form-data'
-        }
-      });
+        const token = localStorage.getItem('token');
+        const response = await axios.post(
+          `${API}/invoices/batch-upload?invoice_type=${invoiceType}`,
+          formData,
+          {
+            headers: {
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'multipart/form-data'
+            },
+            onUploadProgress: (progressEvent) => {
+              const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+              setUploadProgress(percentCompleted);
+            }
+          }
+        );
 
-      toast.success('Invoice uploaded and processed successfully!');
-      navigate(`/verify/${response.data.id}`);
+        toast.success(
+          `Batch upload complete! ${response.data.successful}/${response.data.total_files} invoices processed successfully`
+        );
+        loadDashboardData();
+        navigate('/invoices');
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Upload failed');
     } finally {
       setUploading(false);
+      setUploadProgress(0);
     }
-  }, [navigate]);
+  }, [navigate, invoiceType]);
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
@@ -75,7 +119,7 @@ export default function Dashboard() {
       'image/*': ['.jpeg', '.jpg', '.png'],
       'application/pdf': ['.pdf']
     },
-    maxFiles: 1,
+    maxFiles: 20,
     disabled: uploading
   });
 
@@ -88,28 +132,65 @@ export default function Dashboard() {
     }
   };
 
+  const getTypeIcon = (type) => {
+    return type === 'sales' ? <Receipt size={14} /> : <ShoppingCart size={14} />;
+  };
+
   return (
     <Layout>
       <div className="space-y-8" data-testid="dashboard-page">
         {/* Header */}
-        <div>
-          <h1 className="text-3xl font-manrope font-bold text-[#0B2B5C] mb-2" data-testid="dashboard-title">
-            Invoice Processing Dashboard
-          </h1>
-          <p className="text-muted-foreground">Upload, extract, and verify invoice data with AI</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-manrope font-bold text-[#0B2B5C] mb-2" data-testid="dashboard-title">
+              Invoice Processing Dashboard
+            </h1>
+            <p className="text-muted-foreground">Upload, extract, and verify invoice data with AI</p>
+          </div>
+          <Button
+            onClick={() => navigate('/reports')}
+            data-testid="view-reports-btn"
+            className="bg-[#FFD700] hover:bg-[#FFD700]/90 text-[#0B2B5C] font-manrope font-bold"
+          >
+            GST Reports
+          </Button>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-4">
           <Card className="border-[#0B2B5C]/10 shadow-sm hover:shadow-md transition-shadow duration-200">
             <CardHeader className="pb-3">
               <CardDescription className="flex items-center gap-2">
                 <FileText className="text-[#0B2B5C]" size={16} />
-                Total Invoices
+                Total
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold text-[#0B2B5C]" data-testid="total-invoices-count">{stats.total}</div>
+              <div className="text-2xl font-mono font-bold text-[#0B2B5C]" data-testid="total-invoices-count">{stats.total}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-[#EF4444]/10 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="pb-3">
+              <CardDescription className="flex items-center gap-2">
+                <ShoppingCart className="text-[#EF4444]" size={16} />
+                Purchase
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-mono font-bold text-[#EF4444]" data-testid="purchase-invoices-count">{stats.purchaseInvoices}</div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-[#10B981]/10 shadow-sm hover:shadow-md transition-shadow duration-200">
+            <CardHeader className="pb-3">
+              <CardDescription className="flex items-center gap-2">
+                <Receipt className="text-[#10B981]" size={16} />
+                Sales
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-mono font-bold text-[#10B981]" data-testid="sales-invoices-count">{stats.salesInvoices}</div>
             </CardContent>
           </Card>
 
@@ -117,11 +198,11 @@ export default function Dashboard() {
             <CardHeader className="pb-3">
               <CardDescription className="flex items-center gap-2">
                 <Clock className="text-[#F59E0B]" size={16} />
-                Pending Review
+                Pending
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold text-[#F59E0B]" data-testid="pending-invoices-count">{stats.pending}</div>
+              <div className="text-2xl font-mono font-bold text-[#F59E0B]" data-testid="pending-invoices-count">{stats.pending}</div>
             </CardContent>
           </Card>
 
@@ -133,7 +214,7 @@ export default function Dashboard() {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold text-[#10B981]" data-testid="verified-invoices-count">{stats.verified}</div>
+              <div className="text-2xl font-mono font-bold text-[#10B981]" data-testid="verified-invoices-count">{stats.verified}</div>
             </CardContent>
           </Card>
 
@@ -141,12 +222,12 @@ export default function Dashboard() {
             <CardHeader className="pb-3">
               <CardDescription className="flex items-center gap-2">
                 <TrendingUp className="text-[#0B2B5C]" size={16} />
-                Total Amount
+                Total Value
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-mono font-bold text-[#0B2B5C]" data-testid="total-amount-display">
-                ₹{stats.totalAmount.toLocaleString('en-IN')}
+              <div className="text-2xl font-mono font-bold text-[#0B2B5C]" data-testid="total-amount-display">
+                ₹{stats.totalAmount.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
               </div>
             </CardContent>
           </Card>
@@ -155,8 +236,24 @@ export default function Dashboard() {
         {/* Upload Section */}
         <Card className="border-[#FFD700]/20 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl font-manrope text-[#0B2B5C]">Upload Invoice</CardTitle>
-            <CardDescription>Drag and drop or click to upload invoice (PDF, JPG, PNG)</CardDescription>
+            <div className="flex items-center justify-between">
+              <div>
+                <CardTitle className="text-xl font-manrope text-[#0B2B5C]">Upload Invoices</CardTitle>
+                <CardDescription>Single or batch upload (max 20 files) - PDF, JPG, PNG</CardDescription>
+              </div>
+              <Tabs value={invoiceType} onValueChange={setInvoiceType} className="w-auto">
+                <TabsList data-testid="invoice-type-tabs">
+                  <TabsTrigger value="purchase" data-testid="purchase-tab">
+                    <ShoppingCart size={16} className="mr-2" />
+                    Purchase
+                  </TabsTrigger>
+                  <TabsTrigger value="sales" data-testid="sales-tab">
+                    <Receipt size={16} className="mr-2" />
+                    Sales
+                  </TabsTrigger>
+                </TabsList>
+              </Tabs>
+            </div>
           </CardHeader>
           <CardContent>
             <div
@@ -175,13 +272,20 @@ export default function Dashboard() {
               <input {...getInputProps()} />
               <Upload className="mx-auto mb-4 text-[#0B2B5C]" size={48} />
               {uploading ? (
-                <p className="text-[#0B2B5C] font-medium">Processing invoice...</p>
+                <div className="space-y-3">
+                  <p className="text-[#0B2B5C] font-medium">Processing invoices...</p>
+                  {uploadProgress > 0 && (
+                    <Progress value={uploadProgress} className="w-full max-w-md mx-auto" />
+                  )}
+                </div>
               ) : isDragActive ? (
-                <p className="text-[#FFD700] font-medium">Drop the invoice here</p>
+                <p className="text-[#FFD700] font-medium">Drop invoices here</p>
               ) : (
                 <>
-                  <p className="text-[#0B2B5C] font-medium mb-2">Drop invoice here or click to browse</p>
-                  <p className="text-sm text-muted-foreground">Supports PDF, JPEG, PNG (Max 10MB)</p>
+                  <p className="text-[#0B2B5C] font-medium mb-2">
+                    Drop {invoiceType === 'purchase' ? 'purchase' : 'sales'} invoices here or click to browse
+                  </p>
+                  <p className="text-sm text-muted-foreground">Upload 1-20 invoices at once (Max 10MB each)</p>
                 </>
               )}
             </div>
@@ -210,12 +314,15 @@ export default function Dashboard() {
                     className="flex items-center justify-between p-4 border border-border rounded-sm hover:bg-muted/50 transition-colors duration-200 cursor-pointer"
                     onClick={() => navigate(`/verify/${invoice.id}`)}
                   >
-                    <div className="flex-1">
-                      <div className="font-medium text-[#0B2B5C]">
-                        {invoice.extracted_data?.supplier_name || 'Unknown Supplier'}
-                      </div>
-                      <div className="text-sm text-muted-foreground">
-                        Invoice #{invoice.extracted_data?.invoice_no || 'N/A'} • {invoice.filename}
+                    <div className="flex items-center gap-3 flex-1">
+                      {getTypeIcon(invoice.invoice_type)}
+                      <div>
+                        <div className="font-medium text-[#0B2B5C]">
+                          {invoice.extracted_data?.supplier_name || 'Unknown Party'}
+                        </div>
+                        <div className="text-sm text-muted-foreground">
+                          {invoice.invoice_type === 'sales' ? 'Sales' : 'Purchase'} #{invoice.extracted_data?.invoice_no || 'N/A'} • {invoice.filename}
+                        </div>
                       </div>
                     </div>
                     <div className="flex items-center gap-4">
@@ -224,7 +331,7 @@ export default function Dashboard() {
                           ₹{(invoice.extracted_data?.total_amount || 0).toLocaleString('en-IN')}
                         </div>
                         <div className="text-xs text-muted-foreground">
-                          {new Date(invoice.created_at).toLocaleDateString()}
+                          {invoice.extracted_data?.invoice_date || new Date(invoice.created_at).toLocaleDateString()}
                         </div>
                       </div>
                       <span className={`px-3 py-1 rounded-sm text-xs font-medium ${getStatusColor(invoice.status)}`}>
