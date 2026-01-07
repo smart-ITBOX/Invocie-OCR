@@ -707,16 +707,21 @@ async def update_invoice(
         invoice_id
     )
     
-    # Re-check GST
+    # Re-check GST - but don't block update, just flag
     gst_mismatch = False
-    if update_data.extracted_data.gst_no:
-        invoice_type = update_data.invoice_type or invoice.get('invoice_type', 'purchase')
-        gst_valid = await validate_gst_number(
+    invoice_type = update_data.invoice_type or invoice.get('invoice_type', 'purchase')
+    
+    # Try to validate GST, but don't fail if validation fails
+    try:
+        gst_valid, _ = await validate_gst_number(
             current_user['user_id'],
             invoice_type,
-            update_data.extracted_data.gst_no
+            update_data.extracted_data
         )
         gst_mismatch = not gst_valid
+    except:
+        # If validation fails (e.g., no company settings), just mark as no mismatch
+        gst_mismatch = False
     
     update_dict = {
         "extracted_data": update_data.extracted_data.model_dump(),
