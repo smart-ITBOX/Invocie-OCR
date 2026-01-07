@@ -11,6 +11,8 @@ class InvoiceAPITester:
         self.api_url = f"{base_url}/api"
         self.token = None
         self.user_id = None
+        self.admin_token = None
+        self.admin_user_id = None
         self.tests_run = 0
         self.tests_passed = 0
         self.test_invoice_id = None
