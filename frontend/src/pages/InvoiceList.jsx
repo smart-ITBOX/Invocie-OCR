@@ -222,16 +222,30 @@ export default function InvoiceList() {
             </h1>
             <p className="text-muted-foreground mt-1">
               {filteredInvoices.length} invoice{filteredInvoices.length !== 1 ? 's' : ''} found
+              {invoices.length > 0 && ` • Total: ${invoices.length}`}
             </p>
           </div>
-          <Button
-            onClick={() => navigate('/')}
-            data-testid="back-to-dashboard-btn"
-            variant="outline"
-            className="border-[#0B2B5C] text-[#0B2B5C] hover:bg-[#0B2B5C] hover:text-white"
-          >
-            Back to Dashboard
-          </Button>
+          <div className="flex gap-2">
+            {invoices.length > 0 && (
+              <Button
+                onClick={handleDeleteAll}
+                data-testid="delete-all-btn"
+                variant="destructive"
+                className="bg-[#EF4444] hover:bg-[#DC2626] text-white"
+              >
+                <Trash2 size={16} className="mr-2" />
+                Delete All Records
+              </Button>
+            )}
+            <Button
+              onClick={() => navigate('/')}
+              data-testid="back-to-dashboard-btn"
+              variant="outline"
+              className="border-[#0B2B5C] text-[#0B2B5C] hover:bg-[#0B2B5C] hover:text-white"
+            >
+              Back to Dashboard
+            </Button>
+          </div>
         </div>
 
         {/* Filters and Actions */}
