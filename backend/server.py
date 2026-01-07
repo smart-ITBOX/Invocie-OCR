@@ -151,6 +151,23 @@ class ExportRequest(BaseModel):
     invoice_ids: List[str]
     format: str
 
+class UserProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+class AdminUserUpdate(BaseModel):
+    role: Optional[str] = None
+    subscription_valid_until: Optional[str] = None  # ISO date string
+
+class UserResponse(BaseModel):
+    id: str
+    email: str
+    name: str
+    role: str
+    subscription_valid_until: Optional[str] = None
+    created_at: str
+
 class MonthlyReport(BaseModel):
     month: str
     purchase_invoices: int
