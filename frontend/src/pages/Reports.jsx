@@ -68,6 +68,18 @@ export default function Reports() {
     }
   };
 
+  const loadFinancialData = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/reports/financial-summary`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setFinancialData(response.data);
+    } catch (error) {
+      console.error('Failed to load financial data:', error);
+    }
+  };
+
   const downloadReport = () => {
     if (!report) return;
 
