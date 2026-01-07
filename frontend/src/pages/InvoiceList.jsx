@@ -35,7 +35,7 @@ export default function InvoiceList() {
 
   useEffect(() => {
     filterInvoices();
-  }, [invoices, searchTerm, statusFilter]);
+  }, [invoices, searchTerm, statusFilter, typeFilter, startDate, endDate]);
 
   const loadInvoices = async () => {
     try {
@@ -54,19 +54,53 @@ export default function InvoiceList() {
   const filterInvoices = () => {
     let filtered = invoices;
 
+    // Filter by invoice type
+    if (typeFilter !== 'all') {
+      filtered = filtered.filter(inv => inv.invoice_type === typeFilter);
+    }
+
+    // Filter by status
     if (statusFilter !== 'all') {
       filtered = filtered.filter(inv => inv.status === statusFilter);
     }
 
+    // Filter by search term
     if (searchTerm) {
       filtered = filtered.filter(inv =>
         inv.extracted_data?.supplier_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        inv.extracted_data?.buyer_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         inv.extracted_data?.invoice_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         inv.filename?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
+    // Filter by date range
+    if (startDate || endDate) {
+      filtered = filtered.filter(inv => {
+        const invDate = inv.extracted_data?.invoice_date;
+        if (!invDate) return false;
+        
+        // Parse DD/MM/YYYY to YYYY-MM-DD for comparison
+        const [day, month, year] = invDate.split('/');
+        if (!day || !month || !year) return false;
+        
+        const invDateStr = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+        
+        if (startDate && invDateStr < startDate) return false;
+        if (endDate && invDateStr > endDate) return false;
+        return true;
+      });
+    }
+
     setFilteredInvoices(filtered);
+  };
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setTypeFilter('all');
+    setStartDate('');
+    setEndDate('');
   };
 
   const handleDelete = async (invoiceId) => {
