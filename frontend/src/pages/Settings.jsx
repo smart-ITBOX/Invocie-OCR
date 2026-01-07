@@ -166,6 +166,36 @@ export default function Settings() {
           <CardContent>
             <form onSubmit={handleSave} className="space-y-6">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* Company Logo Upload */}
+                <div className="md:col-span-2">
+                  <Label className="text-[#0B2B5C] font-medium mb-2 block">
+                    Company Logo
+                  </Label>
+                  <div className="flex items-center gap-4">
+                    {logoPreview && (
+                      <div className="w-24 h-24 border-2 border-[#0B2B5C]/20 rounded-sm p-2 bg-white flex items-center justify-center">
+                        <img 
+                          src={logoPreview} 
+                          alt="Company Logo" 
+                          className="max-w-full max-h-full object-contain"
+                        />
+                      </div>
+                    )}
+                    <div className="flex-1">
+                      <Input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleLogoUpload}
+                        className="cursor-pointer"
+                        data-testid="logo-upload-input"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Upload company logo (PNG, JPG - Max 2MB). Recommended: 200x200px
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
                 <div className="md:col-span-2">
                   <Label htmlFor="company_name" className="text-[#0B2B5C] font-medium">
                     Company Name <span className="text-red-500">*</span>
