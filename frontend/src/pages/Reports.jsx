@@ -460,6 +460,193 @@ export default function Reports() {
             </Alert>
           </>
         )}
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics" className="space-y-6 mt-6">
+            {/* Summary Totals */}
+            {financialData?.totals && (
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card className="border-[#EF4444]/20">
+                  <CardContent className="pt-6">
+                    <div className="text-sm text-muted-foreground">Total Purchases</div>
+                    <div className="text-2xl font-mono font-bold text-[#EF4444]">
+                      ₹{financialData.totals.total_purchase.toLocaleString('en-IN')}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-[#10B981]/20">
+                  <CardContent className="pt-6">
+                    <div className="text-sm text-muted-foreground">Total Sales</div>
+                    <div className="text-2xl font-mono font-bold text-[#10B981]">
+                      ₹{financialData.totals.total_sales.toLocaleString('en-IN')}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-[#EF4444]/20">
+                  <CardContent className="pt-6">
+                    <div className="text-sm text-muted-foreground">Total Purchase GST</div>
+                    <div className="text-2xl font-mono font-bold text-[#EF4444]">
+                      ₹{financialData.totals.total_purchase_gst.toLocaleString('en-IN')}
+                    </div>
+                  </CardContent>
+                </Card>
+                <Card className="border-[#10B981]/20">
+                  <CardContent className="pt-6">
+                    <div className="text-sm text-muted-foreground">Total Sales GST</div>
+                    <div className="text-2xl font-mono font-bold text-[#10B981]">
+                      ₹{financialData.totals.total_sales_gst.toLocaleString('en-IN')}
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {/* Bar Chart - Month-wise Comparison */}
+            {chartData.length > 0 && (
+              <Card className="border-[#0B2B5C]/10 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl font-manrope text-[#0B2B5C] flex items-center gap-2">
+                    <BarChart3 size={20} />
+                    Month-wise Sales vs Purchase
+                  </CardTitle>
+                  <CardDescription>Comparative analysis of sales and purchases over time</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-80">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis tickFormatter={(value) => `₹${(value/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                        <Tooltip 
+                          formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, '']}
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                        />
+                        <Legend />
+                        <Bar dataKey="Purchase" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Sales" fill="#10B981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Pie Charts Row */}
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Amount Distribution Pie Chart */}
+              <Card className="border-[#0B2B5C]/10 shadow-md">
+                <CardHeader>
+                  <CardTitle className="text-lg font-manrope text-[#0B2B5C] flex items-center gap-2">
+                    <PieChart size={18} />
+                    Amount Distribution
+                  </CardTitle>
+                  <CardDescription>Sales vs Purchase amounts</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={pieDataAmounts}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {pieDataAmounts.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* GST Distribution Pie Chart */}
+              <Card className="border-[#0B2B5C]/10 shadow-md">
+                <CardHeader>
+                  <CardTitle className="text-lg font-manrope text-[#0B2B5C] flex items-center gap-2">
+                    <PieChart size={18} />
+                    GST Distribution
+                  </CardTitle>
+                  <CardDescription>Sales GST vs Purchase GST</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RechartsPieChart>
+                        <Pie
+                          data={pieDataGST}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={60}
+                          outerRadius={80}
+                          paddingAngle={5}
+                          dataKey="value"
+                          label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {pieDataGST.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip formatter={(value) => `₹${value.toLocaleString('en-IN')}`} />
+                      </RechartsPieChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* GST Trend Bar Chart */}
+            {chartData.length > 0 && (
+              <Card className="border-[#0B2B5C]/10 shadow-lg">
+                <CardHeader>
+                  <CardTitle className="text-xl font-manrope text-[#0B2B5C] flex items-center gap-2">
+                    <TrendingUp size={20} />
+                    GST Trend Analysis
+                  </CardTitle>
+                  <CardDescription>Month-wise GST paid vs collected</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="h-64">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+                        <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                        <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                        <YAxis tickFormatter={(value) => `₹${(value/1000).toFixed(0)}K`} tick={{ fontSize: 12 }} />
+                        <Tooltip 
+                          formatter={(value) => [`₹${value.toLocaleString('en-IN')}`, '']}
+                          contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }}
+                        />
+                        <Legend />
+                        <Bar dataKey="Purchase GST" fill="#EF4444" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="Sales GST" fill="#10B981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* No Data State */}
+            {(!chartData || chartData.length === 0) && (
+              <Alert>
+                <BarChart3 className="h-4 w-4" />
+                <AlertTitle>No Analytics Data</AlertTitle>
+                <AlertDescription>
+                  Upload invoices to see financial analytics and charts.
+                </AlertDescription>
+              </Alert>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </Layout>
   );
