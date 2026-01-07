@@ -165,7 +165,7 @@ export default function Settings() {
                   </Label>
                   <div className="flex items-center gap-4">
                     {logoPreview && (
-                      <div className="w-24 h-24 border-2 border-[#0B2B5C]/20 rounded-sm p-2 bg-white flex items-center justify-center">
+                      <div className="w-24 h-24 border-2 border-[#0B2B5C]/20 rounded-sm p-2 flex items-center justify-center" style={{ background: 'repeating-conic-gradient(#f0f0f0 0% 25%, transparent 0% 50%) 50% / 20px 20px' }}>
                         <img 
                           src={logoPreview} 
                           alt="Company Logo" 
@@ -176,13 +176,13 @@ export default function Settings() {
                     <div className="flex-1">
                       <Input
                         type="file"
-                        accept="image/*"
+                        accept="image/png,image/jpeg,image/jpg"
                         onChange={handleLogoUpload}
                         className="cursor-pointer"
                         data-testid="logo-upload-input"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        Upload company logo (PNG, JPG - Max 2MB). Recommended: 200x200px
+                        <strong>Use PNG for transparent background.</strong> Max 2MB. Recommended: 200x200px square logo.
                       </p>
                     </div>
                   </div>
