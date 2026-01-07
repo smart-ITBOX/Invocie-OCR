@@ -245,6 +245,7 @@ export default function InvoiceList() {
                           className="rounded"
                         />
                       </TableHead>
+                      <TableHead className="font-bold text-[#0B2B5C]">Type</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C]">Invoice No</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C]">Date</TableHead>
                       <TableHead className="font-bold text-[#0B2B5C]">Supplier</TableHead>
