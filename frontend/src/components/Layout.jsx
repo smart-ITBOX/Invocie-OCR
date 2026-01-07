@@ -48,15 +48,16 @@ export default function Layout({ children }) {
               {/* Company Logo and Name */}
               <div className="flex items-center gap-3" data-testid="app-logo">
                 {companySettings?.company_logo ? (
-                  <div className="w-12 h-12 bg-white rounded-sm p-1 flex items-center justify-center shadow-md">
+                  <div className="w-14 h-14 rounded-sm p-1.5 flex items-center justify-center shadow-lg backdrop-blur-sm" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
                     <img 
                       src={companySettings.company_logo} 
                       alt={companySettings.company_name} 
                       className="max-w-full max-h-full object-contain"
+                      style={{ imageRendering: '-webkit-optimize-contrast' }}
                     />
                   </div>
                 ) : (
-                  <div className="w-12 h-12 bg-[#FFD700] rounded-sm flex items-center justify-center shadow-md">
+                  <div className="w-14 h-14 bg-[#FFD700] rounded-sm flex items-center justify-center shadow-lg">
                     <span className="text-2xl font-bold text-[#0B2B5C]">
                       {companySettings?.company_name?.charAt(0) || 'S'}
                     </span>
