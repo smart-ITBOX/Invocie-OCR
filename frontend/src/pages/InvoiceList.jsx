@@ -118,6 +118,38 @@ export default function InvoiceList() {
     }
   };
 
+  const handleDeleteAll = async () => {
+    // First confirmation
+    const firstConfirm = window.confirm(
+      `⚠️ WARNING: You are about to delete ALL ${invoices.length} invoice(s)!\n\nThis action cannot be undone.\n\nAre you sure you want to continue?`
+    );
+    
+    if (!firstConfirm) return;
+
+    // Second confirmation - require user to type DELETE
+    const confirmText = window.prompt(
+      `To confirm deletion of ALL invoices, please type: DELETE\n\n(Type DELETE in capital letters)`
+    );
+
+    if (confirmText !== 'DELETE') {
+      toast.error('Deletion cancelled. Confirmation text did not match.');
+      return;
+    }
+
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.delete(`${API}/invoices`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      toast.success(`Successfully deleted ${response.data.deleted_count} invoice(s)`);
+      loadInvoices();
+      setSelectedInvoices([]);
+    } catch (error) {
+      toast.error('Failed to delete invoices');
+    }
+  };
+
   const handleExport = async (format) => {
     if (selectedInvoices.length === 0) {
       toast.error('Please select invoices to export');
