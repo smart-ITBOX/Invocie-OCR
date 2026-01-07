@@ -25,7 +25,13 @@ export default function Login() {
       localStorage.setItem('token', response.data.token);
       localStorage.setItem('user', JSON.stringify(response.data.user));
       toast.success('Login successful!');
-      navigate('/');
+      
+      // Redirect admin to admin panel, regular users to dashboard
+      if (response.data.user.role === 'admin') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Login failed');
     } finally {
