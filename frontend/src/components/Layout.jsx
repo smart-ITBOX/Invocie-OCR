@@ -46,6 +46,16 @@ export default function Layout({ children }) {
                   <FileText size={18} />
                   All Invoices
                 </button>
+                <button
+                  onClick={() => navigate('/settings')}
+                  data-testid="nav-settings-btn"
+                  className={`flex items-center gap-2 px-3 py-2 rounded-sm text-sm font-medium transition-colors duration-200 ${
+                    location.pathname === '/settings' ? 'bg-white/10 text-[#FFD700]' : 'text-white/80 hover:text-white hover:bg-white/5'
+                  }`}
+                >
+                  <SettingsIcon size={18} />
+                  Settings
+                </button>
               </div>
             </div>
             <div className="flex items-center gap-4">
