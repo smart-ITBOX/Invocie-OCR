@@ -1,12 +1,36 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Home, FileText, LogOut, Settings as SettingsIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
+import axios from 'axios';
+
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
+const API = `${BACKEND_URL}/api`;
 
 export default function Layout({ children }) {
   const navigate = useNavigate();
   const location = useLocation();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
+  const [companySettings, setCompanySettings] = useState(null);
+
+  useEffect(() => {
+    loadCompanySettings();
+  }, []);
+
+  const loadCompanySettings = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/settings/company`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      if (response.data && response.data.company_name) {
+        setCompanySettings(response.data);
+      }
+    } catch (error) {
+      // Settings not configured yet
+    }
+  };
 
   const handleLogout = () => {
     localStorage.removeItem('token');
