@@ -555,36 +555,46 @@ async def batch_upload_invoices(
     invoices = []
     successful = 0
     failed = 0
+    errors = []
     
     for file in files:
         try:
             allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']
             if file.content_type not in allowed_types:
                 failed += 1
+                errors.append(f"{file.filename}: Invalid file type")
                 continue
             
             file_data = await file.read()
             extracted_data, confidence_scores = await extract_invoice_data(file_data, file.filename, invoice_type)
             month, fy = get_month_and_fy(extracted_data.invoice_date or "")
             
-            is_duplicate, duplicate_ids = await check_duplicate_invoice(
-                current_user['user_id'],
-                extracted_data.invoice_no
-            )
-            
-            gst_mismatch = False
-            if extracted_data.gst_no:
-                gst_valid = await validate_gst_number(
+            # Check for duplicates - SKIP if duplicate
+            if extracted_data.invoice_no:
+                is_duplicate, duplicate_ids = await check_duplicate_invoice(
                     current_user['user_id'],
-                    invoice_type,
-                    extracted_data.gst_no
+                    extracted_data.invoice_no
                 )
-                gst_mismatch = not gst_valid
+                if is_duplicate:
+                    failed += 1
+                    errors.append(f"{file.filename}: Duplicate invoice #{extracted_data.invoice_no}")
+                    continue
+            
+            # Validate GST - SKIP if invalid
+            gst_valid, error_message = await validate_gst_number(
+                current_user['user_id'],
+                invoice_type,
+                extracted_data
+            )
+            if not gst_valid:
+                failed += 1
+                errors.append(f"{file.filename}: {error_message}")
+                continue
             
             validation_flags = ValidationFlags(
-                is_duplicate=is_duplicate,
-                gst_mismatch=gst_mismatch,
-                duplicate_invoice_ids=duplicate_ids
+                is_duplicate=False,
+                gst_mismatch=False,
+                duplicate_invoice_ids=[]
             )
             
             file_base64 = base64.b64encode(file_data).decode()
@@ -613,12 +623,14 @@ async def batch_upload_invoices(
         except Exception as e:
             logging.error(f"Error processing {file.filename}: {str(e)}")
             failed += 1
+            errors.append(f"{file.filename}: {str(e)}")
     
     return {
         "total_files": len(files),
         "successful": successful,
         "failed": failed,
-        "invoices": [inv.model_dump() for inv in invoices]
+        "invoices": [inv.model_dump() for inv in invoices],
+        "errors": errors
     }
 
 @api_router.get("/invoices")
