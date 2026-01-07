@@ -752,6 +752,18 @@ async def delete_invoice(invoice_id: str, current_user: dict = Depends(get_curre
     
     return {"message": "Invoice deleted successfully"}
 
+@api_router.delete("/invoices")
+async def delete_all_invoices(current_user: dict = Depends(get_current_user)):
+    """Delete all invoices for the current user"""
+    result = await db.invoices.delete_many(
+        {"user_id": current_user['user_id']}
+    )
+    
+    return {
+        "message": f"Successfully deleted {result.deleted_count} invoice(s)",
+        "deleted_count": result.deleted_count
+    }
+
 @api_router.get("/reports/monthly")
 async def get_monthly_report(
     month: Optional[str] = None,
