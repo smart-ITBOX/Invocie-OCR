@@ -1149,6 +1149,87 @@ async def get_admin_stats(current_user: dict = Depends(get_current_user)):
         "active_subscriptions": active_subs
     }
 
+@api_router.get("/admin/invoices")
+async def get_all_invoices_admin(
+    search: Optional[str] = None,
+    company_name: Optional[str] = None,
+    invoice_type: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get all invoices from all companies (admin only)"""
+    await check_admin(current_user)
+    
+    # Get all invoices
+    invoices = await db.invoices.find(
+        {},
+        {"_id": 0, "file_data": 0}
+    ).sort("created_at", -1).to_list(10000)
+    
+    # Get all users and their company settings
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    user_map = {u['id']: u for u in users}
+    
+    company_settings = await db.company_settings.find({}, {"_id": 0}).to_list(1000)
+    company_map = {cs['user_id']: cs for cs in company_settings}
+    
+    # Enrich invoices with company details
+    result = []
+    for invoice in invoices:
+        user_id = invoice.get('user_id')
+        user = user_map.get(user_id, {})
+        company = company_map.get(user_id, {})
+        
+        # Add company info to invoice
+        invoice['company_name'] = company.get('company_name', 'N/A')
+        invoice['company_gst'] = company.get('company_gst_no', 'N/A')
+        invoice['user_name'] = user.get('name', 'Unknown')
+        invoice['user_email'] = user.get('email', 'Unknown')
+        
+        # Apply filters
+        if company_name and company_name.lower() not in invoice['company_name'].lower():
+            continue
+        
+        if invoice_type and invoice.get('invoice_type') != invoice_type:
+            continue
+        
+        if search:
+            search_lower = search.lower()
+            searchable = f"{invoice.get('company_name', '')} {invoice.get('extracted_data', {}).get('invoice_no', '')} {invoice.get('extracted_data', {}).get('supplier_name', '')} {invoice.get('user_name', '')}".lower()
+            if search_lower not in searchable:
+                continue
+        
+        # Convert datetime fields
+        if isinstance(invoice.get('created_at'), str):
+            pass
+        elif invoice.get('created_at'):
+            invoice['created_at'] = invoice['created_at'].isoformat()
+        
+        if isinstance(invoice.get('updated_at'), str):
+            pass
+        elif invoice.get('updated_at'):
+            invoice['updated_at'] = invoice['updated_at'].isoformat()
+        
+        result.append(invoice)
+    
+    return result
+
+@api_router.get("/admin/companies")
+async def get_all_companies(current_user: dict = Depends(get_current_user)):
+    """Get list of all companies for filtering (admin only)"""
+    await check_admin(current_user)
+    
+    company_settings = await db.company_settings.find({}, {"_id": 0}).to_list(1000)
+    companies = [
+        {
+            "user_id": cs.get('user_id'),
+            "company_name": cs.get('company_name'),
+            "company_gst_no": cs.get('company_gst_no')
+        }
+        for cs in company_settings if cs.get('company_name')
+    ]
+    
+    return companies
+
 # ============= Financial Analytics Endpoints =============
 
 @api_router.get("/reports/financial-summary")
