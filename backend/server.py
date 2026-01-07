@@ -1077,19 +1077,21 @@ async def update_user(
     update_data: AdminUserUpdate,
     current_user: dict = Depends(get_current_user)
 ):
-    """Update user details (admin only)"""
+    """Update user access status (admin only)"""
     await check_admin(current_user)
     
     user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
     if not user_doc:
         raise HTTPException(status_code=404, detail="User not found")
     
+    # Prevent disabling own account
+    if user_id == current_user['user_id'] and update_data.is_active == False:
+        raise HTTPException(status_code=400, detail="Cannot disable your own account")
+    
     update_dict = {}
     
-    if update_data.role:
-        if update_data.role not in ['user', 'admin']:
-            raise HTTPException(status_code=400, detail="Invalid role. Use 'user' or 'admin'")
-        update_dict["role"] = update_data.role
+    if update_data.is_active is not None:
+        update_dict["is_active"] = update_data.is_active
     
     if update_data.subscription_valid_until:
         try:
