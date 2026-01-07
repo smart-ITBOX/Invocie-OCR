@@ -237,6 +237,9 @@ frontend:
       - working: true
         agent: "testing"
         comment: "✅ PASSED - Admin Dashboard fully functional. Successfully tested: 1) Navigation to /admin via Admin button, 2) Super Admin Panel title displays correctly, 3) All 3 stats cards present (Total Users: 5, Active Subscriptions: 0, Total Invoices: 8), 4) User Management table with proper columns (User, Email, Role, Subscription, Registered, Actions), 5) Edit buttons functional - opens edit dialog with Role and Subscription selects, 6) All 5 users displayed in table with proper data. UI is responsive and professional."
+      - working: true
+        agent: "testing"
+        comment: "✅ UPDATED ADMIN PANEL PASSED - All requested features working correctly: 1) Admin login with admin@test.com/admin123 ✅, 2) Navigation to /admin shows 'Super Admin Panel' title ✅, 3) Stats cards show Total Users: 5, Active Users: 4, Total Invoices: 8 ✅, 4) Users table has correct columns (User, Company, GST No., Invoices, Registered, Access, Actions) ✅, 5) Company details from user settings displayed (e.g., SMART ITBOX with GST: 09OPPW6390Q1ZS) ✅, 6) Enable/Disable toggle switches work correctly ✅, 7) View Details dialog opens with User Information and Company Details sections ✅, 8) Disabled users cannot login (blocked access) ✅. Minor: Status badge visual refresh needed after toggle but functionality works. All core admin features operational."
 
   - task: "User Profile Page"
     implemented: true
