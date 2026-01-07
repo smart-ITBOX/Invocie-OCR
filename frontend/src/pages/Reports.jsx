@@ -16,12 +16,16 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsive
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
 
+const COLORS = ['#0B2B5C', '#10B981', '#FFD700', '#EF4444', '#8B5CF6', '#F97316'];
+
 export default function Reports() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [months, setMonths] = useState([]);
   const [selectedMonth, setSelectedMonth] = useState('');
   const [report, setReport] = useState(null);
+  const [financialData, setFinancialData] = useState(null);
+  const [activeTab, setActiveTab] = useState('gst');
 
   useEffect(() => {
     loadAvailableMonths();
