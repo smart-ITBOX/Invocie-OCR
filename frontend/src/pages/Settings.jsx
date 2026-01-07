@@ -80,15 +80,6 @@ export default function Settings() {
 
   const handleSave = async (e) => {
     e.preventDefault();
-      setLoading(false);
-    } catch (error) {
-      toast.error('Failed to load settings');
-      setLoading(false);
-    }
-  };
-
-  const handleSave = async (e) => {
-    e.preventDefault();
     
     if (!formData.company_name || !formData.company_gst_no) {
       toast.error('Company name and GST number are required');
