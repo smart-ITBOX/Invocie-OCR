@@ -9,6 +9,7 @@ import Reports from '@/pages/Reports';
 import Settings from '@/pages/Settings';
 import Profile from '@/pages/Profile';
 import AdminDashboard from '@/pages/AdminDashboard';
+import AdminReports from '@/pages/AdminReports';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import '@/App.css';
 
@@ -25,6 +26,7 @@ function App() {
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
+          <Route path="/admin/reports" element={<ProtectedRoute><AdminReports /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
