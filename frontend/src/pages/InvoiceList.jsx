@@ -284,6 +284,9 @@ export default function InvoiceList() {
                               {invoice.invoice_type === 'sales' ? 'SALES' : 'PURCHASE'}
                             </Badge>
                           </TableCell>
+                          <TableCell className="font-mono text-sm">
+                            {invoice.extracted_data?.invoice_no || 'N/A'}
+                          </TableCell>
                           <TableCell className="text-sm">
                             {invoice.extracted_data?.invoice_date || 'N/A'}
                           </TableCell>
