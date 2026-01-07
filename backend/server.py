@@ -275,49 +275,77 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
 
         if invoice_type == "purchase":
             prompt = """Extract the following information from this PURCHASE invoice:
+            
+            CRITICAL: Extract BOTH supplier (Bill From) and buyer (Bill To) details.
+            
             - Invoice No
             - Invoice Date (in DD/MM/YYYY format)
-            - Supplier/Vendor Name
+            
+            **BILL FROM / SUPPLIER DETAILS (Who is selling):**
+            - Supplier Name
             - Supplier Address
             - Supplier GST No
-            - Contact Person Name (if available)
-            - Contact Number/Phone (if available)
+            - Supplier Contact Person (if available)
+            - Supplier Contact Number (if available)
+            
+            **BILL TO / BUYER DETAILS (Who is purchasing - the company receiving the invoice):**
+            - Buyer Name
+            - Buyer Address
+            - Buyer GST No (CRITICAL - this should be the purchasing company's GST)
+            - Buyer Contact Person (if available)
+            - Buyer Contact Number (if available)
+            
+            **AMOUNTS:**
             - Basic Amount (taxable amount before GST)
             - GST Amount (total GST)
             - Total Amount (final payable amount)
             - GST Rate (percentage like 5, 12, 18, 28)
             - If GST is split, extract: CGST, SGST, IGST amounts
             
-            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name, address, gst_no, contact_person, contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
+            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name, supplier_address, supplier_gst_no, supplier_contact_person, supplier_contact_number, buyer_name, buyer_address, buyer_gst_no, buyer_contact_person, buyer_contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
             Also include a confidence score (0-100) for each field.
             
             Format:
             {
-                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", ...},
+                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", "supplier_name": "...", "buyer_name": "...", ...},
                 "confidence": {"invoice_no": 95, ...}
             }
             """
         else:
             prompt = """Extract the following information from this SALES invoice:
+            
+            CRITICAL: Extract BOTH supplier (Bill From - your company) and buyer (Bill To - customer) details.
+            
             - Invoice No
             - Invoice Date (in DD/MM/YYYY format)
-            - Customer/Buyer Name
-            - Customer Address
-            - Customer GST No
-            - Contact Person Name (if available)
-            - Contact Number/Phone (if available)
+            
+            **BILL FROM / SUPPLIER DETAILS (Your company - who is selling):**
+            - Supplier Name (your company name)
+            - Supplier Address
+            - Supplier GST No (CRITICAL - this should be your company's GST)
+            - Supplier Contact Person (if available)
+            - Supplier Contact Number (if available)
+            
+            **BILL TO / BUYER/CUSTOMER DETAILS (Who is purchasing):**
+            - Buyer Name (customer name)
+            - Buyer Address
+            - Buyer GST No
+            - Buyer Contact Person (if available)
+            - Buyer Contact Number (if available)
+            
+            **AMOUNTS:**
             - Basic Amount (taxable amount before GST)
             - GST Amount (total GST)
             - Total Amount (final receivable amount)
             - GST Rate (percentage like 5, 12, 18, 28)
             - If GST is split, extract: CGST, SGST, IGST amounts
             
-            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name (use customer name here), address, gst_no, contact_person, contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
+            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name, supplier_address, supplier_gst_no, supplier_contact_person, supplier_contact_number, buyer_name, buyer_address, buyer_gst_no, buyer_contact_person, buyer_contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
             Also include a confidence score (0-100) for each field.
             
             Format:
             {
-                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", ...},
+                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", "supplier_name": "...", "buyer_name": "...", ...},
                 "confidence": {"invoice_no": 95, ...}
             }
             """
