@@ -180,11 +180,19 @@ async def extract_invoice_data(file_data: bytes, filename: str) -> tuple[Invoice
 
         # Parse response
         import json
+        import re
         response_text = response.strip()
+        
+        # Try to extract JSON from markdown code blocks
         if "```json" in response_text:
             response_text = response_text.split("```json")[1].split("```")[0].strip()
         elif "```" in response_text:
             response_text = response_text.split("```")[1].split("```")[0].strip()
+        
+        # Try to find JSON object using regex
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            response_text = json_match.group(0)
         
         result = json.loads(response_text)
         
