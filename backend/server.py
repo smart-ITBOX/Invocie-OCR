@@ -216,8 +216,12 @@ async def extract_invoice_data(file_data: bytes, filename: str) -> tuple[Invoice
 
     except Exception as e:
         logging.error(f"Error extracting invoice data: {str(e)}")
+        logging.error(f"Response was: {response if 'response' in locals() else 'No response'}")
         # Return empty data with low confidence on error
-        return InvoiceData(), ConfidenceScores()
+        return InvoiceData(), ConfidenceScores(
+            invoice_no=0.5, invoice_date=0.5, supplier_name=0.5, address=0.5,
+            gst_no=0.5, basic_amount=0.5, gst=0.5, total_amount=0.5
+        )
 
 # Routes
 @api_router.post("/auth/register")
