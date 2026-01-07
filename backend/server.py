@@ -935,6 +935,256 @@ def generate_csv(invoices: List[Dict]) -> str:
     
     return csv
 
+# ============= User Profile Endpoints =============
+
+@api_router.get("/users/me")
+async def get_current_user_profile(current_user: dict = Depends(get_current_user)):
+    """Get current user's profile"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0, "password_hash": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Convert datetime if needed
+    if isinstance(user_doc.get('created_at'), str):
+        pass  # Keep as string
+    elif user_doc.get('created_at'):
+        user_doc['created_at'] = user_doc['created_at'].isoformat()
+    
+    if user_doc.get('subscription_valid_until'):
+        if isinstance(user_doc['subscription_valid_until'], str):
+            pass
+        else:
+            user_doc['subscription_valid_until'] = user_doc['subscription_valid_until'].isoformat()
+    
+    return user_doc
+
+@api_router.put("/users/me")
+async def update_current_user_profile(
+    update_data: UserProfileUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update current user's profile"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    update_dict = {}
+    
+    # Update name if provided
+    if update_data.name:
+        update_dict["name"] = update_data.name
+    
+    # Update password if both current and new provided
+    if update_data.current_password and update_data.new_password:
+        password_hash = user_doc.get('password_hash')
+        if not bcrypt.checkpw(update_data.current_password.encode(), password_hash.encode()):
+            raise HTTPException(status_code=400, detail="Current password is incorrect")
+        
+        new_password_hash = bcrypt.hashpw(update_data.new_password.encode(), bcrypt.gensalt()).decode()
+        update_dict["password_hash"] = new_password_hash
+    
+    if not update_dict:
+        return {"message": "No updates provided"}
+    
+    await db.users.update_one(
+        {"id": current_user['user_id']},
+        {"$set": update_dict}
+    )
+    
+    return {"message": "Profile updated successfully"}
+
+# ============= Admin Endpoints =============
+
+async def check_admin(current_user: dict):
+    """Helper to verify admin role"""
+    user_doc = await db.users.find_one({"id": current_user['user_id']}, {"_id": 0})
+    if not user_doc or user_doc.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail="Admin access required")
+    return user_doc
+
+@api_router.get("/admin/users")
+async def get_all_users(current_user: dict = Depends(get_current_user)):
+    """Get all users (admin only)"""
+    await check_admin(current_user)
+    
+    users = await db.users.find({}, {"_id": 0, "password_hash": 0}).to_list(1000)
+    
+    # Convert datetime fields
+    for user in users:
+        if isinstance(user.get('created_at'), str):
+            pass
+        elif user.get('created_at'):
+            user['created_at'] = user['created_at'].isoformat()
+        
+        if user.get('subscription_valid_until'):
+            if isinstance(user['subscription_valid_until'], str):
+                pass
+            else:
+                user['subscription_valid_until'] = user['subscription_valid_until'].isoformat()
+    
+    return users
+
+@api_router.get("/admin/users/{user_id}")
+async def get_user_by_id(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific user (admin only)"""
+    await check_admin(current_user)
+    
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0, "password_hash": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Convert datetime fields
+    if isinstance(user_doc.get('created_at'), str):
+        pass
+    elif user_doc.get('created_at'):
+        user_doc['created_at'] = user_doc['created_at'].isoformat()
+    
+    if user_doc.get('subscription_valid_until'):
+        if isinstance(user_doc['subscription_valid_until'], str):
+            pass
+        else:
+            user_doc['subscription_valid_until'] = user_doc['subscription_valid_until'].isoformat()
+    
+    return user_doc
+
+@api_router.put("/admin/users/{user_id}")
+async def update_user(
+    user_id: str,
+    update_data: AdminUserUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Update user details (admin only)"""
+    await check_admin(current_user)
+    
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    update_dict = {}
+    
+    if update_data.role:
+        if update_data.role not in ['user', 'admin']:
+            raise HTTPException(status_code=400, detail="Invalid role. Use 'user' or 'admin'")
+        update_dict["role"] = update_data.role
+    
+    if update_data.subscription_valid_until:
+        try:
+            # Parse ISO date string
+            subscription_date = datetime.fromisoformat(update_data.subscription_valid_until.replace('Z', '+00:00'))
+            update_dict["subscription_valid_until"] = subscription_date.isoformat()
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid date format. Use ISO format (YYYY-MM-DD)")
+    
+    if not update_dict:
+        return {"message": "No updates provided"}
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": update_dict}
+    )
+    
+    return {"message": "User updated successfully"}
+
+@api_router.delete("/admin/users/{user_id}")
+async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a user (admin only)"""
+    await check_admin(current_user)
+    
+    # Prevent deleting self
+    if user_id == current_user['user_id']:
+        raise HTTPException(status_code=400, detail="Cannot delete your own account")
+    
+    result = await db.users.delete_one({"id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Also delete user's invoices and settings
+    await db.invoices.delete_many({"user_id": user_id})
+    await db.company_settings.delete_many({"user_id": user_id})
+    
+    return {"message": "User and associated data deleted successfully"}
+
+@api_router.get("/admin/stats")
+async def get_admin_stats(current_user: dict = Depends(get_current_user)):
+    """Get platform statistics (admin only)"""
+    await check_admin(current_user)
+    
+    total_users = await db.users.count_documents({})
+    total_invoices = await db.invoices.count_documents({})
+    
+    # Count active subscriptions
+    active_subs = await db.users.count_documents({
+        "subscription_valid_until": {"$gte": datetime.now(timezone.utc).isoformat()}
+    })
+    
+    return {
+        "total_users": total_users,
+        "total_invoices": total_invoices,
+        "active_subscriptions": active_subs
+    }
+
+# ============= Financial Analytics Endpoints =============
+
+@api_router.get("/reports/financial-summary")
+async def get_financial_summary(
+    year: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    """Get month-wise financial summary for charts"""
+    query = {"user_id": current_user['user_id']}
+    
+    invoices = await db.invoices.find(query, {"_id": 0}).to_list(10000)
+    
+    # Group by month
+    monthly_data = {}
+    
+    for invoice in invoices:
+        month = invoice.get('month')
+        if not month:
+            continue
+        
+        if year and not month.startswith(year):
+            continue
+        
+        if month not in monthly_data:
+            monthly_data[month] = {
+                "month": month,
+                "purchase_count": 0,
+                "sales_count": 0,
+                "purchase_amount": 0,
+                "sales_amount": 0,
+                "purchase_gst": 0,
+                "sales_gst": 0
+            }
+        
+        inv_type = invoice.get('invoice_type', 'purchase')
+        ext_data = invoice.get('extracted_data', {})
+        
+        if inv_type == 'purchase':
+            monthly_data[month]["purchase_count"] += 1
+            monthly_data[month]["purchase_amount"] += ext_data.get('total_amount') or 0
+            monthly_data[month]["purchase_gst"] += ext_data.get('gst') or 0
+        else:
+            monthly_data[month]["sales_count"] += 1
+            monthly_data[month]["sales_amount"] += ext_data.get('total_amount') or 0
+            monthly_data[month]["sales_gst"] += ext_data.get('gst') or 0
+    
+    # Convert to sorted list
+    result = sorted(monthly_data.values(), key=lambda x: x['month'])
+    
+    # Calculate totals
+    totals = {
+        "total_purchase": sum(m['purchase_amount'] for m in result),
+        "total_sales": sum(m['sales_amount'] for m in result),
+        "total_purchase_gst": sum(m['purchase_gst'] for m in result),
+        "total_sales_gst": sum(m['sales_gst'] for m in result)
+    }
+    
+    return {
+        "monthly_data": result,
+        "totals": totals
+    }
+
 app.include_router(api_router)
 
 app.add_middleware(
