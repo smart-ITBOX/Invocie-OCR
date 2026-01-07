@@ -5,15 +5,12 @@ import { toast } from 'sonner';
 import Layout from '@/components/Layout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Users, FileText, CreditCard, Shield, Edit, Trash2, UserCheck, UserX, Calendar } from 'lucide-react';
+import { ArrowLeft, Users, FileText, Building2, Shield, Eye, UserCheck, UserX, Calendar, Mail, Phone, MapPin } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -24,14 +21,8 @@ export default function AdminDashboard() {
   const [users, setUsers] = useState([]);
   const [stats, setStats] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [userToDelete, setUserToDelete] = useState(null);
-  const [saving, setSaving] = useState(false);
-  const [editForm, setEditForm] = useState({
-    role: '',
-    subscription_months: 1
-  });
+  const [viewDialogOpen, setViewDialogOpen] = useState(false);
+  const [updatingUser, setUpdatingUser] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -61,65 +52,28 @@ export default function AdminDashboard() {
     }
   };
 
-  const openEditDialog = (user) => {
-    setSelectedUser(user);
-    setEditForm({
-      role: user.role || 'user',
-      subscription_months: 1
-    });
-    setEditDialogOpen(true);
-  };
-
-  const handleUpdateUser = async () => {
-    if (!selectedUser) return;
-    
-    setSaving(true);
+  const handleToggleAccess = async (user) => {
+    setUpdatingUser(user.id);
     try {
       const token = localStorage.getItem('token');
-      
-      // Calculate subscription end date
-      const subscriptionDate = new Date();
-      subscriptionDate.setMonth(subscriptionDate.getMonth() + editForm.subscription_months);
-      
       await axios.put(
-        `${API}/admin/users/${selectedUser.id}`,
-        {
-          role: editForm.role,
-          subscription_valid_until: subscriptionDate.toISOString()
-        },
+        `${API}/admin/users/${user.id}`,
+        { is_active: !user.is_active },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       
-      toast.success('User updated successfully');
-      setEditDialogOpen(false);
+      toast.success(`User ${!user.is_active ? 'enabled' : 'disabled'} successfully`);
       loadData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Failed to update user');
     } finally {
-      setSaving(false);
+      setUpdatingUser(null);
     }
   };
 
-  const openDeleteDialog = (user) => {
-    setUserToDelete(user);
-    setDeleteDialogOpen(true);
-  };
-
-  const handleDeleteUser = async () => {
-    if (!userToDelete) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      await axios.delete(`${API}/admin/users/${userToDelete.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      toast.success('User deleted successfully');
-      setDeleteDialogOpen(false);
-      loadData();
-    } catch (error) {
-      toast.error(error.response?.data?.detail || 'Failed to delete user');
-    }
+  const openViewDialog = (user) => {
+    setSelectedUser(user);
+    setViewDialogOpen(true);
   };
 
   const formatDate = (dateStr) => {
@@ -132,15 +86,6 @@ export default function AdminDashboard() {
       });
     } catch {
       return dateStr;
-    }
-  };
-
-  const isSubscriptionActive = (dateStr) => {
-    if (!dateStr) return false;
-    try {
-      return new Date(dateStr) > new Date();
-    } catch {
-      return false;
     }
   };
 
@@ -170,7 +115,7 @@ export default function AdminDashboard() {
             <Shield className="inline-block mr-3 text-[#FFD700]" size={32} />
             Super Admin Panel
           </h1>
-          <p className="text-muted-foreground mt-1">Manage users and subscriptions</p>
+          <p className="text-muted-foreground mt-1">Manage all registered users and their access</p>
         </div>
 
         {/* Stats Cards */}
@@ -193,13 +138,13 @@ export default function AdminDashboard() {
             <Card className="border-[#10B981]/20 shadow-md">
               <CardHeader className="pb-3">
                 <CardDescription className="flex items-center gap-2">
-                  <CreditCard className="text-[#10B981]" size={18} />
-                  Active Subscriptions
+                  <UserCheck className="text-[#10B981]" size={18} />
+                  Active Users
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-3xl font-mono font-bold text-[#10B981]" data-testid="active-subs">
-                  {stats.active_subscriptions}
+                <div className="text-3xl font-mono font-bold text-[#10B981]" data-testid="active-users">
+                  {users.filter(u => u.is_active !== false).length}
                 </div>
               </CardContent>
             </Card>
@@ -223,8 +168,8 @@ export default function AdminDashboard() {
         {/* Users Table */}
         <Card className="border-[#0B2B5C]/10 shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl font-manrope text-[#0B2B5C]">User Management</CardTitle>
-            <CardDescription>View and manage all registered users</CardDescription>
+            <CardTitle className="text-xl font-manrope text-[#0B2B5C]">All Registered Users</CardTitle>
+            <CardDescription>View user details and manage their access</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="rounded-md border">
@@ -232,76 +177,81 @@ export default function AdminDashboard() {
                 <TableHeader>
                   <TableRow className="bg-[#0B2B5C]/5">
                     <TableHead className="font-semibold">User</TableHead>
-                    <TableHead className="font-semibold">Email</TableHead>
-                    <TableHead className="font-semibold">Role</TableHead>
-                    <TableHead className="font-semibold">Subscription</TableHead>
+                    <TableHead className="font-semibold">Company</TableHead>
+                    <TableHead className="font-semibold">GST No.</TableHead>
+                    <TableHead className="font-semibold">Invoices</TableHead>
                     <TableHead className="font-semibold">Registered</TableHead>
+                    <TableHead className="font-semibold text-center">Access</TableHead>
                     <TableHead className="font-semibold text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {users.map((user) => (
-                    <TableRow key={user.id} data-testid={`user-row-${user.id}`}>
-                      <TableCell className="font-medium">{user.name}</TableCell>
-                      <TableCell className="text-muted-foreground">{user.email}</TableCell>
+                    <TableRow 
+                      key={user.id} 
+                      data-testid={`user-row-${user.id}`}
+                      className={!user.is_active ? 'bg-red-50/50' : ''}
+                    >
                       <TableCell>
-                        <Badge 
-                          variant={user.role === 'admin' ? 'default' : 'secondary'}
-                          className={user.role === 'admin' ? 'bg-[#0B2B5C]' : ''}
-                        >
-                          {user.role === 'admin' ? (
-                            <><Shield size={12} className="mr-1" /> Admin</>
-                          ) : (
-                            'User'
-                          )}
-                        </Badge>
+                        <div>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-xs text-muted-foreground">{user.email}</div>
+                        </div>
                       </TableCell>
                       <TableCell>
-                        {user.subscription_valid_until ? (
-                          <div className="flex items-center gap-2">
-                            {isSubscriptionActive(user.subscription_valid_until) ? (
-                              <Badge variant="outline" className="text-[#10B981] border-[#10B981]">
-                                <UserCheck size={12} className="mr-1" />
-                                Active
-                              </Badge>
-                            ) : (
-                              <Badge variant="outline" className="text-[#EF4444] border-[#EF4444]">
-                                <UserX size={12} className="mr-1" />
-                                Expired
-                              </Badge>
-                            )}
-                            <span className="text-xs text-muted-foreground">
-                              {formatDate(user.subscription_valid_until)}
-                            </span>
+                        {user.company_details?.company_name ? (
+                          <div className="flex items-center gap-1">
+                            <Building2 size={14} className="text-[#0B2B5C]" />
+                            <span className="text-sm">{user.company_details.company_name}</span>
                           </div>
                         ) : (
                           <span className="text-muted-foreground text-sm">Not set</span>
                         )}
                       </TableCell>
+                      <TableCell>
+                        {user.company_details?.company_gst_no ? (
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">
+                            {user.company_details.company_gst_no}
+                          </code>
+                        ) : (
+                          <span className="text-muted-foreground text-sm">-</span>
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">{user.invoice_count || 0}</Badge>
+                      </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {formatDate(user.created_at)}
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openEditDialog(user)}
-                            data-testid={`edit-user-${user.id}`}
-                          >
-                            <Edit size={14} className="mr-1" />
-                            Edit
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => openDeleteDialog(user)}
-                            className="text-[#EF4444] hover:text-[#EF4444] hover:bg-[#EF4444]/10"
-                            data-testid={`delete-user-${user.id}`}
-                          >
-                            <Trash2 size={14} />
-                          </Button>
+                      <TableCell className="text-center">
+                        <div className="flex items-center justify-center gap-2">
+                          <Switch
+                            checked={user.is_active !== false}
+                            onCheckedChange={() => handleToggleAccess(user)}
+                            disabled={updatingUser === user.id || user.role === 'admin'}
+                            data-testid={`toggle-access-${user.id}`}
+                          />
+                          {user.is_active !== false ? (
+                            <Badge variant="outline" className="text-[#10B981] border-[#10B981]">
+                              Enabled
+                            </Badge>
+                          ) : (
+                            <Badge variant="outline" className="text-[#EF4444] border-[#EF4444]">
+                              Disabled
+                            </Badge>
+                          )}
                         </div>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openViewDialog(user)}
+                          data-testid={`view-user-${user.id}`}
+                        >
+                          <Eye size={14} className="mr-1" />
+                          View Details
+                        </Button>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -311,91 +261,111 @@ export default function AdminDashboard() {
           </CardContent>
         </Card>
 
-        {/* Edit User Dialog */}
-        <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-          <DialogContent className="sm:max-w-md">
+        {/* View User Details Dialog */}
+        <Dialog open={viewDialogOpen} onOpenChange={setViewDialogOpen}>
+          <DialogContent className="sm:max-w-lg">
             <DialogHeader>
-              <DialogTitle className="text-[#0B2B5C] font-manrope">Edit User</DialogTitle>
+              <DialogTitle className="text-[#0B2B5C] font-manrope">User Details</DialogTitle>
               <DialogDescription>
-                Update {selectedUser?.name}'s role and subscription
+                Complete information for {selectedUser?.name}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Role</Label>
-                <Select 
-                  value={editForm.role} 
-                  onValueChange={(value) => setEditForm({ ...editForm, role: value })}
-                >
-                  <SelectTrigger data-testid="role-select">
-                    <SelectValue placeholder="Select role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
+            
+            {selectedUser && (
+              <div className="space-y-4 py-4">
+                {/* User Info Section */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-[#0B2B5C] flex items-center gap-2">
+                    <Users size={16} />
+                    User Information
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Name:</span>
+                      <div className="font-medium">{selectedUser.name}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Email:</span>
+                      <div className="font-medium">{selectedUser.email}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Registered:</span>
+                      <div className="font-medium">{formatDate(selectedUser.created_at)}</div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Status:</span>
+                      <div>
+                        {selectedUser.is_active !== false ? (
+                          <Badge variant="outline" className="text-[#10B981] border-[#10B981]">
+                            <UserCheck size={12} className="mr-1" /> Active
+                          </Badge>
+                        ) : (
+                          <Badge variant="outline" className="text-[#EF4444] border-[#EF4444]">
+                            <UserX size={12} className="mr-1" /> Disabled
+                          </Badge>
+                        )}
+                      </div>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Total Invoices:</span>
+                      <div className="font-medium">{selectedUser.invoice_count || 0}</div>
+                    </div>
+                  </div>
+                </div>
+
+                <Separator />
+
+                {/* Company Details Section */}
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-[#0B2B5C] flex items-center gap-2">
+                    <Building2 size={16} />
+                    Company Details
+                  </h4>
+                  {selectedUser.company_details?.company_name ? (
+                    <div className="space-y-2 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Company Name:</span>
+                        <div className="font-medium">{selectedUser.company_details.company_name}</div>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">GST Number:</span>
+                        <div className="font-mono font-medium">
+                          {selectedUser.company_details.company_gst_no || '-'}
+                        </div>
+                      </div>
+                      {selectedUser.company_details.address && (
+                        <div>
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <MapPin size={12} /> Address:
+                          </span>
+                          <div className="font-medium">{selectedUser.company_details.address}</div>
+                        </div>
+                      )}
+                      {selectedUser.company_details.contact_person && (
+                        <div>
+                          <span className="text-muted-foreground">Contact Person:</span>
+                          <div className="font-medium">{selectedUser.company_details.contact_person}</div>
+                        </div>
+                      )}
+                      {selectedUser.company_details.contact_number && (
+                        <div>
+                          <span className="text-muted-foreground flex items-center gap-1">
+                            <Phone size={12} /> Contact:
+                          </span>
+                          <div className="font-medium">{selectedUser.company_details.contact_number}</div>
+                        </div>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground italic">
+                      No company details configured yet.
+                    </p>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Extend Subscription By</Label>
-                <Select 
-                  value={String(editForm.subscription_months)} 
-                  onValueChange={(value) => setEditForm({ ...editForm, subscription_months: parseInt(value) })}
-                >
-                  <SelectTrigger data-testid="subscription-select">
-                    <SelectValue placeholder="Select months" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="1">1 Month</SelectItem>
-                    <SelectItem value="3">3 Months</SelectItem>
-                    <SelectItem value="6">6 Months</SelectItem>
-                    <SelectItem value="12">12 Months</SelectItem>
-                  </SelectContent>
-                </Select>
-                <p className="text-xs text-muted-foreground">
-                  <Calendar size={12} className="inline mr-1" />
-                  New expiry: {new Date(Date.now() + editForm.subscription_months * 30 * 24 * 60 * 60 * 1000).toLocaleDateString('en-IN')}
-                </p>
-              </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={handleUpdateUser}
-                disabled={saving}
-                className="bg-[#0B2B5C] hover:bg-[#0B2B5C]/90"
-                data-testid="save-user-btn"
-              >
-                {saving ? 'Saving...' : 'Save Changes'}
-              </Button>
-            </DialogFooter>
+            )}
           </DialogContent>
         </Dialog>
-
-        {/* Delete Confirmation Dialog */}
-        <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Delete User?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete <strong>{userToDelete?.name}</strong> ({userToDelete?.email}) 
-                and all their invoices and settings. This action cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction 
-                onClick={handleDeleteUser}
-                className="bg-[#EF4444] hover:bg-[#EF4444]/90"
-                data-testid="confirm-delete-btn"
-              >
-                Delete User
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
       </div>
     </Layout>
   );
