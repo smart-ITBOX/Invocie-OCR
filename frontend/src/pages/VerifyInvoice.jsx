@@ -26,11 +26,26 @@ export default function VerifyInvoice() {
     invoice_no: '',
     invoice_date: '',
     supplier_name: '',
+    supplier_address: '',
+    supplier_gst_no: '',
+    supplier_contact_person: '',
+    supplier_contact_number: '',
+    buyer_name: '',
+    buyer_address: '',
+    buyer_gst_no: '',
+    buyer_contact_person: '',
+    buyer_contact_number: '',
     address: '',
     gst_no: '',
-    basic_amount: '',
-    gst: '',
-    total_amount: ''
+    contact_person: '',
+    contact_number: '',
+    basic_amount: 0,
+    gst: 0,
+    total_amount: 0,
+    gst_rate: 0,
+    cgst: 0,
+    sgst: 0,
+    igst: 0
   });
 
   useEffect(() => {
