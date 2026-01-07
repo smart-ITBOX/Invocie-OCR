@@ -29,6 +29,7 @@ export default function Reports() {
 
   useEffect(() => {
     loadAvailableMonths();
+    loadFinancialData();
   }, []);
 
   useEffect(() => {
