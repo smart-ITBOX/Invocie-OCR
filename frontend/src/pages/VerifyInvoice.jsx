@@ -59,7 +59,32 @@ export default function VerifyInvoice() {
         headers: { Authorization: `Bearer ${token}` }
       });
       setInvoice(response.data);
-      setFormData(response.data.extracted_data);
+      // Merge extracted data with default values to ensure all fields exist
+      setFormData({
+        invoice_no: response.data.extracted_data?.invoice_no || '',
+        invoice_date: response.data.extracted_data?.invoice_date || '',
+        supplier_name: response.data.extracted_data?.supplier_name || '',
+        supplier_address: response.data.extracted_data?.supplier_address || '',
+        supplier_gst_no: response.data.extracted_data?.supplier_gst_no || '',
+        supplier_contact_person: response.data.extracted_data?.supplier_contact_person || '',
+        supplier_contact_number: response.data.extracted_data?.supplier_contact_number || '',
+        buyer_name: response.data.extracted_data?.buyer_name || '',
+        buyer_address: response.data.extracted_data?.buyer_address || '',
+        buyer_gst_no: response.data.extracted_data?.buyer_gst_no || '',
+        buyer_contact_person: response.data.extracted_data?.buyer_contact_person || '',
+        buyer_contact_number: response.data.extracted_data?.buyer_contact_number || '',
+        address: response.data.extracted_data?.address || '',
+        gst_no: response.data.extracted_data?.gst_no || '',
+        contact_person: response.data.extracted_data?.contact_person || '',
+        contact_number: response.data.extracted_data?.contact_number || '',
+        basic_amount: response.data.extracted_data?.basic_amount || 0,
+        gst: response.data.extracted_data?.gst || 0,
+        total_amount: response.data.extracted_data?.total_amount || 0,
+        gst_rate: response.data.extracted_data?.gst_rate || 0,
+        cgst: response.data.extracted_data?.cgst || 0,
+        sgst: response.data.extracted_data?.sgst || 0,
+        igst: response.data.extracted_data?.igst || 0
+      });
       setLoading(false);
     } catch (error) {
       toast.error('Failed to load invoice');
