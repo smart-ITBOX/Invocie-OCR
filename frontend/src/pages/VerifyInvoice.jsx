@@ -302,9 +302,11 @@ export default function VerifyInvoice() {
 
               <Separator />
 
-              {/* Supplier Information */}
+              {/* Bill From / Supplier Information */}
               <div className="space-y-4">
-                <h3 className="font-manrope font-semibold text-[#0B2B5C]">Supplier Information</h3>
+                <h3 className="font-manrope font-semibold text-[#0B2B5C]">
+                  {invoice.invoice_type === 'sales' ? 'Bill From (Your Company)' : 'Bill From (Supplier/Vendor)'}
+                </h3>
                 <div>
                   <Label htmlFor="supplier_name" className="flex items-center">
                     Supplier Name
@@ -319,30 +321,122 @@ export default function VerifyInvoice() {
                   />
                 </div>
                 <div>
-                  <Label htmlFor="address" className="flex items-center">
-                    Address
-                    {getConfidenceBadge('address')}
+                  <Label htmlFor="supplier_address" className="flex items-center">
+                    Supplier Address
                   </Label>
                   <Input
-                    id="address"
-                    data-testid="address-input"
-                    value={formData.address || ''}
-                    onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    className={`mt-1 ${getConfidenceColor('address')}`}
+                    id="supplier_address"
+                    data-testid="supplier-address-input"
+                    value={formData.supplier_address || formData.address || ''}
+                    onChange={(e) => setFormData({ ...formData, supplier_address: e.target.value, address: e.target.value })}
+                    className="mt-1"
                   />
                 </div>
                 <div>
-                  <Label htmlFor="gst_no" className="flex items-center">
-                    GST Number
+                  <Label htmlFor="supplier_gst_no" className="flex items-center">
+                    Supplier GST Number
                     {getConfidenceBadge('gst_no')}
                   </Label>
                   <Input
-                    id="gst_no"
-                    data-testid="gst-no-input"
-                    value={formData.gst_no || ''}
-                    onChange={(e) => setFormData({ ...formData, gst_no: e.target.value })}
+                    id="supplier_gst_no"
+                    data-testid="supplier-gst-no-input"
+                    value={formData.supplier_gst_no || formData.gst_no || ''}
+                    onChange={(e) => setFormData({ ...formData, supplier_gst_no: e.target.value, gst_no: e.target.value })}
                     className={`font-mono mt-1 ${getConfidenceColor('gst_no')}`}
                   />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="supplier_contact_person">Contact Person</Label>
+                    <Input
+                      id="supplier_contact_person"
+                      data-testid="supplier-contact-person-input"
+                      value={formData.supplier_contact_person || formData.contact_person || ''}
+                      onChange={(e) => setFormData({ ...formData, supplier_contact_person: e.target.value, contact_person: e.target.value })}
+                      className="mt-1"
+                      placeholder="Name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="supplier_contact_number">Contact Number</Label>
+                    <Input
+                      id="supplier_contact_number"
+                      data-testid="supplier-contact-number-input"
+                      value={formData.supplier_contact_number || formData.contact_number || ''}
+                      onChange={(e) => setFormData({ ...formData, supplier_contact_number: e.target.value, contact_number: e.target.value })}
+                      className="mt-1"
+                      placeholder="+91 9876543210"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Bill To / Buyer Information */}
+              <div className="space-y-4">
+                <h3 className="font-manrope font-semibold text-[#0B2B5C]">
+                  {invoice.invoice_type === 'sales' ? 'Bill To (Customer/Buyer)' : 'Bill To (Your Company)'}
+                </h3>
+                <div>
+                  <Label htmlFor="buyer_name" className="flex items-center">
+                    Buyer Name
+                  </Label>
+                  <Input
+                    id="buyer_name"
+                    data-testid="buyer-name-input"
+                    value={formData.buyer_name || ''}
+                    onChange={(e) => setFormData({ ...formData, buyer_name: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="buyer_address" className="flex items-center">
+                    Buyer Address
+                  </Label>
+                  <Input
+                    id="buyer_address"
+                    data-testid="buyer-address-input"
+                    value={formData.buyer_address || ''}
+                    onChange={(e) => setFormData({ ...formData, buyer_address: e.target.value })}
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="buyer_gst_no" className="flex items-center">
+                    Buyer GST Number
+                  </Label>
+                  <Input
+                    id="buyer_gst_no"
+                    data-testid="buyer-gst-no-input"
+                    value={formData.buyer_gst_no || ''}
+                    onChange={(e) => setFormData({ ...formData, buyer_gst_no: e.target.value })}
+                    className="font-mono mt-1"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="buyer_contact_person">Contact Person</Label>
+                    <Input
+                      id="buyer_contact_person"
+                      data-testid="buyer-contact-person-input"
+                      value={formData.buyer_contact_person || ''}
+                      onChange={(e) => setFormData({ ...formData, buyer_contact_person: e.target.value })}
+                      className="mt-1"
+                      placeholder="Name"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="buyer_contact_number">Contact Number</Label>
+                    <Input
+                      id="buyer_contact_number"
+                      data-testid="buyer-contact-number-input"
+                      value={formData.buyer_contact_number || ''}
+                      onChange={(e) => setFormData({ ...formData, buyer_contact_number: e.target.value })}
+                      className="mt-1"
+                      placeholder="+91 9876543210"
+                    />
+                  </div>
                 </div>
               </div>
 
