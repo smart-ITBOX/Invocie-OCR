@@ -274,8 +274,14 @@ export default function InvoiceList() {
                               className="rounded"
                             />
                           </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {invoice.extracted_data?.invoice_no || 'N/A'}
+                          <TableCell>
+                            <Badge 
+                              variant="outline" 
+                              className={invoice.invoice_type === 'sales' ? 'bg-[#10B981]/10 text-[#10B981] border-[#10B981] font-semibold' : 'bg-[#EF4444]/10 text-[#EF4444] border-[#EF4444] font-semibold'}
+                              data-testid={`type-badge-${invoice.id}`}
+                            >
+                              {invoice.invoice_type === 'sales' ? 'SALES' : 'PURCHASE'}
+                            </Badge>
                           </TableCell>
                           <TableCell className="text-sm">
                             {invoice.extracted_data?.invoice_date || 'N/A'}
