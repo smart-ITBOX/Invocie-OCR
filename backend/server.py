@@ -489,27 +489,35 @@ async def upload_invoice(
     
     extracted_data, confidence_scores = await extract_invoice_data(file_data, file.filename, invoice_type)
     
-    month, fy = get_month_and_fy(extracted_data.invoice_date or "")
+    # Check for duplicate invoice number - BLOCK if duplicate found
+    if extracted_data.invoice_no:
+        is_duplicate, duplicate_ids = await check_duplicate_invoice(
+            current_user['user_id'],
+            extracted_data.invoice_no
+        )
+        if is_duplicate:
+            raise HTTPException(
+                status_code=400, 
+                detail=f"Duplicate Invoice Number: Invoice #{extracted_data.invoice_no} already exists in the system (ID: {duplicate_ids[0]}). Please check existing invoices."
+            )
     
-    # Check for duplicates and GST validation
-    is_duplicate, duplicate_ids = await check_duplicate_invoice(
+    # Validate GST number - BLOCK if invalid
+    gst_valid, error_message = await validate_gst_number(
         current_user['user_id'],
-        extracted_data.invoice_no
+        invoice_type,
+        extracted_data
     )
     
-    gst_mismatch = False
-    if extracted_data.gst_no:
-        gst_valid = await validate_gst_number(
-            current_user['user_id'],
-            invoice_type,
-            extracted_data.gst_no
-        )
-        gst_mismatch = not gst_valid
+    if not gst_valid:
+        raise HTTPException(status_code=400, detail=error_message)
     
+    month, fy = get_month_and_fy(extracted_data.invoice_date or "")
+    
+    # All validations passed
     validation_flags = ValidationFlags(
-        is_duplicate=is_duplicate,
-        gst_mismatch=gst_mismatch,
-        duplicate_invoice_ids=duplicate_ids
+        is_duplicate=False,
+        gst_mismatch=False,
+        duplicate_invoice_ids=[]
     )
     
     file_base64 = base64.b64encode(file_data).decode()
