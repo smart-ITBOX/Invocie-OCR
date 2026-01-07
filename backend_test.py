@@ -510,16 +510,41 @@ class InvoiceAPITester:
         print("=" * 50)
         
         # Test authentication
+        print("\n📝 Testing Authentication...")
         self.test_user_registration()
         self.test_user_login()
+        self.test_admin_login()
+        
+        # Test user profile features
+        print("\n👤 Testing User Profile Features...")
+        self.test_get_current_user_profile()
+        self.test_update_user_profile()
+        self.test_update_user_password()
+        
+        # Test admin features
+        print("\n🔐 Testing Admin Features...")
+        self.test_non_admin_access_to_admin_endpoints()
+        self.test_admin_get_all_users()
+        self.test_admin_get_specific_user()
+        self.test_admin_update_user()
+        self.test_admin_stats()
+        
+        # Test financial analytics
+        print("\n📊 Testing Financial Analytics...")
+        self.test_financial_summary()
         
         # Test invoice operations
+        print("\n📄 Testing Invoice Operations...")
         self.test_invoice_upload()
         self.test_get_invoices()
         self.test_get_specific_invoice()
         self.test_update_invoice()
         self.test_export_invoices()
         self.test_delete_invoice()
+        
+        # Test admin delete (last as it removes test user)
+        print("\n🗑️ Testing Admin Delete...")
+        self.test_admin_delete_user()
         
         # Print summary
         print("\n" + "=" * 50)
