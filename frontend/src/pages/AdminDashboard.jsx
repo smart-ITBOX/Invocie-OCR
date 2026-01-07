@@ -10,7 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Users, FileText, Building2, Shield, Eye, UserCheck, UserX, Calendar, Mail, Phone, MapPin } from 'lucide-react';
+import { ArrowLeft, Users, Building2, Shield, Eye, UserCheck, UserX, Phone, MapPin } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -19,7 +19,6 @@ export default function AdminDashboard() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState([]);
-  const [stats, setStats] = useState(null);
   const [selectedUser, setSelectedUser] = useState(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [updatingUser, setUpdatingUser] = useState(null);
@@ -33,13 +32,8 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('token');
       const headers = { Authorization: `Bearer ${token}` };
       
-      const [usersRes, statsRes] = await Promise.all([
-        axios.get(`${API}/admin/users`, { headers }),
-        axios.get(`${API}/admin/stats`, { headers })
-      ]);
-      
+      const usersRes = await axios.get(`${API}/admin/users`, { headers });
       setUsers(usersRes.data);
-      setStats(statsRes.data);
       setLoading(false);
     } catch (error) {
       if (error.response?.status === 403) {
@@ -89,6 +83,9 @@ export default function AdminDashboard() {
     }
   };
 
+  const activeUsers = users.filter(u => u.is_active !== false).length;
+  const disabledUsers = users.filter(u => u.is_active === false).length;
+
   if (loading) {
     return (
       <Layout>
@@ -118,52 +115,50 @@ export default function AdminDashboard() {
           <p className="text-muted-foreground mt-1">Manage all registered users and their access</p>
         </div>
 
-        {/* Stats Cards */}
-        {stats && (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-[#0B2B5C]/10 shadow-md">
-              <CardHeader className="pb-3">
-                <CardDescription className="flex items-center gap-2">
-                  <Users className="text-[#0B2B5C]" size={18} />
-                  Total Users
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-mono font-bold text-[#0B2B5C]" data-testid="total-users">
-                  {stats.total_users}
-                </div>
-              </CardContent>
-            </Card>
+        {/* Stats Cards - Only User Stats */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="border-[#0B2B5C]/10 shadow-md">
+            <CardHeader className="pb-3">
+              <CardDescription className="flex items-center gap-2">
+                <Users className="text-[#0B2B5C]" size={18} />
+                Total Users
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-mono font-bold text-[#0B2B5C]" data-testid="total-users">
+                {users.length}
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="border-[#10B981]/20 shadow-md">
-              <CardHeader className="pb-3">
-                <CardDescription className="flex items-center gap-2">
-                  <UserCheck className="text-[#10B981]" size={18} />
-                  Active Users
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-mono font-bold text-[#10B981]" data-testid="active-users">
-                  {users.filter(u => u.is_active !== false).length}
-                </div>
-              </CardContent>
-            </Card>
+          <Card className="border-[#10B981]/20 shadow-md">
+            <CardHeader className="pb-3">
+              <CardDescription className="flex items-center gap-2">
+                <UserCheck className="text-[#10B981]" size={18} />
+                Active Users
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-mono font-bold text-[#10B981]" data-testid="active-users">
+                {activeUsers}
+              </div>
+            </CardContent>
+          </Card>
 
-            <Card className="border-[#FFD700]/30 shadow-md">
-              <CardHeader className="pb-3">
-                <CardDescription className="flex items-center gap-2">
-                  <FileText className="text-[#FFD700]" size={18} />
-                  Total Invoices
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="text-3xl font-mono font-bold text-[#0B2B5C]" data-testid="total-invoices">
-                  {stats.total_invoices}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
+          <Card className="border-[#EF4444]/20 shadow-md">
+            <CardHeader className="pb-3">
+              <CardDescription className="flex items-center gap-2">
+                <UserX className="text-[#EF4444]" size={18} />
+                Disabled Users
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-mono font-bold text-[#EF4444]" data-testid="disabled-users">
+                {disabledUsers}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
         {/* Users Table */}
         <Card className="border-[#0B2B5C]/10 shadow-lg">
@@ -177,9 +172,8 @@ export default function AdminDashboard() {
                 <TableHeader>
                   <TableRow className="bg-[#0B2B5C]/5">
                     <TableHead className="font-semibold">User</TableHead>
-                    <TableHead className="font-semibold">Company</TableHead>
+                    <TableHead className="font-semibold">Company Name</TableHead>
                     <TableHead className="font-semibold">GST No.</TableHead>
-                    <TableHead className="font-semibold">Invoices</TableHead>
                     <TableHead className="font-semibold">Registered</TableHead>
                     <TableHead className="font-semibold text-center">Access</TableHead>
                     <TableHead className="font-semibold text-right">Actions</TableHead>
@@ -190,7 +184,7 @@ export default function AdminDashboard() {
                     <TableRow 
                       key={user.id} 
                       data-testid={`user-row-${user.id}`}
-                      className={!user.is_active ? 'bg-red-50/50' : ''}
+                      className={user.is_active === false ? 'bg-red-50/50' : ''}
                     >
                       <TableCell>
                         <div>
@@ -216,9 +210,6 @@ export default function AdminDashboard() {
                         ) : (
                           <span className="text-muted-foreground text-sm">-</span>
                         )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{user.invoice_count || 0}</Badge>
                       </TableCell>
                       <TableCell className="text-muted-foreground text-sm">
                         {formatDate(user.created_at)}
@@ -305,10 +296,6 @@ export default function AdminDashboard() {
                           </Badge>
                         )}
                       </div>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Total Invoices:</span>
-                      <div className="font-medium">{selectedUser.invoice_count || 0}</div>
                     </div>
                   </div>
                 </div>
