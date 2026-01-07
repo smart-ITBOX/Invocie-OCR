@@ -59,6 +59,7 @@ class CompanySettings(BaseModel):
     user_id: str
     company_name: str
     company_gst_no: str
+    company_logo: Optional[str] = None  # Base64 encoded logo
     address: Optional[str] = None
     contact_person: Optional[str] = None
     contact_number: Optional[str] = None
@@ -67,6 +68,7 @@ class CompanySettings(BaseModel):
 class CompanySettingsUpdate(BaseModel):
     company_name: str
     company_gst_no: str
+    company_logo: Optional[str] = None
     address: Optional[str] = None
     contact_person: Optional[str] = None
     contact_number: Optional[str] = None
