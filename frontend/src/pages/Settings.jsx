@@ -18,9 +18,11 @@ export default function Settings() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [logoPreview, setLogoPreview] = useState(null);
   const [formData, setFormData] = useState({
     company_name: '',
     company_gst_no: '',
+    company_logo: '',
     address: '',
     contact_person: '',
     contact_number: ''
@@ -33,6 +35,48 @@ export default function Settings() {
   const loadSettings = async () => {
     try {
       const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/settings/company`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (response.data && response.data.company_name) {
+        setFormData(response.data);
+        if (response.data.company_logo) {
+          setLogoPreview(response.data.company_logo);
+        }
+      }
+      setLoading(false);
+    } catch (error) {
+      toast.error('Failed to load settings');
+      setLoading(false);
+    }
+  };
+
+  const handleLogoUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    // Validate file type
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please upload an image file');
+      return;
+    }
+
+    // Validate file size (max 2MB)
+    if (file.size > 2 * 1024 * 1024) {
+      toast.error('Logo size must be less than 2MB');
+      return;
+    }
+
+    // Convert to base64
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64String = reader.result;
+      setLogoPreview(base64String);
+      setFormData({ ...formData, company_logo: base64String });
+    };
+    reader.readAsDataURL(file);
+  };
       const response = await axios.get(`${API}/settings/company`, {
         headers: { Authorization: `Bearer ${token}` }
       });
