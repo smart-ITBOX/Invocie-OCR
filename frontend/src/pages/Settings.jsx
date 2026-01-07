@@ -163,13 +163,14 @@ export default function Settings() {
                   <Label className="text-[#0B2B5C] font-medium mb-2 block">
                     Company Logo
                   </Label>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-6">
                     {logoPreview && (
-                      <div className="w-24 h-24 border-2 border-[#0B2B5C]/20 rounded-sm p-2 flex items-center justify-center" style={{ background: 'repeating-conic-gradient(#f0f0f0 0% 25%, transparent 0% 50%) 50% / 20px 20px' }}>
+                      <div className="w-32 h-32 border-2 border-[#0B2B5C]/20 rounded-md p-3 flex items-center justify-center" style={{ background: 'repeating-conic-gradient(#f0f0f0 0% 25%, transparent 0% 50%) 50% / 20px 20px' }}>
                         <img 
                           src={logoPreview} 
-                          alt="Company Logo" 
-                          className="max-w-full max-h-full object-contain"
+                          alt="Company Logo Preview" 
+                          className="w-full h-full object-contain"
+                          style={{ imageRendering: 'crisp-edges' }}
                         />
                       </div>
                     )}
@@ -182,7 +183,7 @@ export default function Settings() {
                         data-testid="logo-upload-input"
                       />
                       <p className="text-xs text-muted-foreground mt-1">
-                        <strong>Use PNG for transparent background.</strong> Max 2MB. Recommended: 200x200px square logo.
+                        <strong>Use PNG for transparent background.</strong> Max 2MB. Recommended: Square logo at least 300x300px for best clarity.
                       </p>
                     </div>
                   </div>
