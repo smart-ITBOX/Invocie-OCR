@@ -205,53 +205,110 @@ export default function InvoiceList() {
         {/* Filters and Actions */}
         <Card className="border-[#0B2B5C]/10">
           <CardContent className="pt-6">
-            <div className="flex flex-col md:flex-row gap-4">
-              <div className="flex-1 relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
-                <Input
-                  placeholder="Search by supplier, invoice number, or filename..."
-                  data-testid="search-invoices-input"
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10"
-                />
+            <div className="flex flex-col gap-4">
+              {/* Row 1: Search, Type, Status */}
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-1 relative">
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground" size={18} />
+                  <Input
+                    placeholder="Search by supplier, buyer, invoice number, or filename..."
+                    data-testid="search-invoices-input"
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="pl-10"
+                  />
+                </div>
+                <Select value={typeFilter} onValueChange={setTypeFilter}>
+                  <SelectTrigger className="w-full md:w-48" data-testid="type-filter-select">
+                    <Filter size={16} className="mr-2" />
+                    <SelectValue placeholder="Filter by type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Types</SelectItem>
+                    <SelectItem value="purchase">Purchase Only</SelectItem>
+                    <SelectItem value="sales">Sales Only</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                  <SelectTrigger className="w-full md:w-48" data-testid="status-filter-select">
+                    <Filter size={16} className="mr-2" />
+                    <SelectValue placeholder="Filter by status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Status</SelectItem>
+                    <SelectItem value="pending">Pending</SelectItem>
+                    <SelectItem value="verified">Verified</SelectItem>
+                    <SelectItem value="exported">Exported</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full md:w-48" data-testid="status-filter-select">
-                  <Filter size={16} className="mr-2" />
-                  <SelectValue placeholder="Filter by status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="verified">Verified</SelectItem>
-                  <SelectItem value="exported">Exported</SelectItem>
-                </SelectContent>
-              </Select>
-              {selectedInvoices.length > 0 && (
-                <DropdownMenu>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      data-testid="export-menu-btn"
-                      className="bg-[#FFD700] hover:bg-[#FFD700]/90 text-[#0B2B5C] font-medium"
-                    >
-                      <Download size={16} className="mr-2" />
-                      Export ({selectedInvoices.length})
-                    </Button>
-                  </DropdownMenuTrigger>
-                  <DropdownMenuContent>
-                    <DropdownMenuItem onClick={() => handleExport('tally')} data-testid="export-tally-btn">
-                      Tally XML
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport('csv')} data-testid="export-csv-btn">
-                      CSV
-                    </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => handleExport('json')} data-testid="export-json-btn">
-                      JSON
-                    </DropdownMenuItem>
-                  </DropdownMenuContent>
-                </DropdownMenu>
-              )}
+
+              {/* Row 2: Date Range Filters */}
+              <div className="flex flex-col md:flex-row gap-4 items-end">
+                <div className="flex-1">
+                  <Label htmlFor="start-date" className="text-sm font-medium text-[#0B2B5C] mb-1 flex items-center gap-2">
+                    <Calendar size={16} />
+                    From Date
+                  </Label>
+                  <Input
+                    id="start-date"
+                    type="date"
+                    data-testid="start-date-filter"
+                    value={startDate}
+                    onChange={(e) => setStartDate(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                <div className="flex-1">
+                  <Label htmlFor="end-date" className="text-sm font-medium text-[#0B2B5C] mb-1 flex items-center gap-2">
+                    <Calendar size={16} />
+                    To Date
+                  </Label>
+                  <Input
+                    id="end-date"
+                    type="date"
+                    data-testid="end-date-filter"
+                    value={endDate}
+                    onChange={(e) => setEndDate(e.target.value)}
+                    className="mt-1"
+                  />
+                </div>
+                {(searchTerm || statusFilter !== 'all' || typeFilter !== 'all' || startDate || endDate) && (
+                  <Button
+                    variant="outline"
+                    onClick={clearFilters}
+                    data-testid="clear-filters-btn"
+                    className="border-[#EF4444] text-[#EF4444] hover:bg-[#EF4444] hover:text-white"
+                  >
+                    <X size={16} className="mr-2" />
+                    Clear All Filters
+                  </Button>
+                )}
+                {selectedInvoices.length > 0 && (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        data-testid="export-menu-btn"
+                        className="bg-[#FFD700] hover:bg-[#FFD700]/90 text-[#0B2B5C] font-medium"
+                      >
+                        <Download size={16} className="mr-2" />
+                        Export ({selectedInvoices.length})
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent>
+                      <DropdownMenuItem onClick={() => handleExport('tally')} data-testid="export-tally-btn">
+                        Tally XML
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport('csv')} data-testid="export-csv-btn">
+                        CSV
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => handleExport('json')} data-testid="export-json-btn">
+                        JSON
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                )}
+              </div>
             </div>
           </CardContent>
         </Card>
