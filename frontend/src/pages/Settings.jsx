@@ -77,13 +77,9 @@ export default function Settings() {
     };
     reader.readAsDataURL(file);
   };
-      const response = await axios.get(`${API}/settings/company`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      
-      if (response.data && response.data.company_name) {
-        setFormData(response.data);
-      }
+
+  const handleSave = async (e) => {
+    e.preventDefault();
       setLoading(false);
     } catch (error) {
       toast.error('Failed to load settings');
