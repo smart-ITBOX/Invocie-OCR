@@ -137,6 +137,32 @@ export default function Layout({ children }) {
                   <SettingsIcon size={18} />
                   Settings
                 </button>
+                <button
+                  onClick={() => navigate('/reports')}
+                  data-testid="nav-reports-btn"
+                  className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                    location.pathname === '/reports' 
+                      ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                      : 'text-white/80 hover:text-white hover:bg-white/10'
+                  }`}
+                >
+                  <BarChart3 size={18} />
+                  Reports
+                </button>
+                {userProfile?.role === 'admin' && (
+                  <button
+                    onClick={() => navigate('/admin')}
+                    data-testid="nav-admin-btn"
+                    className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                      location.pathname === '/admin' 
+                        ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                        : 'text-white/80 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <Shield size={18} />
+                    Admin
+                  </button>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-3">
