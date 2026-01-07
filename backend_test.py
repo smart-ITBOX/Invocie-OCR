@@ -236,6 +236,272 @@ class InvoiceAPITester:
         except Exception as e:
             return self.log_test("Delete Invoice", False, f"- Error: {str(e)}")
 
+    # ============= NEW FEATURE TESTS =============
+
+    def test_admin_login(self):
+        """Test admin login with provided credentials"""
+        admin_login_data = {
+            "email": "admin@test.com",
+            "password": "admin123"
+        }
+        
+        try:
+            response = requests.post(f"{self.api_url}/auth/login", json=admin_login_data, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'token' in data and 'user' in data:
+                    self.admin_token = data['token']
+                    self.admin_user_id = data['user']['id']
+                    admin_role = data['user'].get('role', 'user')
+                    if admin_role == 'admin':
+                        return self.log_test("Admin Login", True, f"- Admin authenticated, Role: {admin_role}")
+                    else:
+                        return self.log_test("Admin Login", False, f"- User role is '{admin_role}', not 'admin'")
+                else:
+                    return self.log_test("Admin Login", False, "- Missing token or user in response")
+            else:
+                return self.log_test("Admin Login", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Admin Login", False, f"- Error: {str(e)}")
+
+    def test_get_current_user_profile(self):
+        """Test GET /api/users/me"""
+        if not self.token:
+            return self.log_test("Get Current User Profile", False, "- No authentication token")
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.token}'}
+            response = requests.get(f"{self.api_url}/users/me", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ['id', 'email', 'name', 'role', 'created_at']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if not missing_fields:
+                    return self.log_test("Get Current User Profile", True, f"- Profile retrieved: {data.get('email')}")
+                else:
+                    return self.log_test("Get Current User Profile", False, f"- Missing fields: {missing_fields}")
+            else:
+                return self.log_test("Get Current User Profile", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Get Current User Profile", False, f"- Error: {str(e)}")
+
+    def test_update_user_profile(self):
+        """Test PUT /api/users/me"""
+        if not self.token:
+            return self.log_test("Update User Profile", False, "- No authentication token")
+        
+        update_data = {
+            "name": "Updated Test User"
+        }
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'}
+            response = requests.put(f"{self.api_url}/users/me", json=update_data, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'message' in data:
+                    return self.log_test("Update User Profile", True, "- Profile updated successfully")
+                else:
+                    return self.log_test("Update User Profile", False, "- Missing success message")
+            else:
+                return self.log_test("Update User Profile", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Update User Profile", False, f"- Error: {str(e)}")
+
+    def test_update_user_password(self):
+        """Test PUT /api/users/me with password change"""
+        if not self.token:
+            return self.log_test("Update User Password", False, "- No authentication token")
+        
+        # First, let's try with wrong current password to test validation
+        wrong_password_data = {
+            "current_password": "wrongpassword",
+            "new_password": "newtestpass123"
+        }
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.token}', 'Content-Type': 'application/json'}
+            response = requests.put(f"{self.api_url}/users/me", json=wrong_password_data, headers=headers, timeout=10)
+            
+            if response.status_code == 400:
+                return self.log_test("Update User Password", True, "- Correctly rejected wrong current password")
+            else:
+                return self.log_test("Update User Password", False, f"- Should reject wrong password, got status: {response.status_code}")
+                
+        except Exception as e:
+            return self.log_test("Update User Password", False, f"- Error: {str(e)}")
+
+    def test_admin_get_all_users(self):
+        """Test GET /api/admin/users"""
+        if not hasattr(self, 'admin_token') or not self.admin_token:
+            return self.log_test("Admin Get All Users", False, "- No admin authentication token")
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.admin_token}'}
+            response = requests.get(f"{self.api_url}/admin/users", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if isinstance(data, list) and len(data) > 0:
+                    return self.log_test("Admin Get All Users", True, f"- Retrieved {len(data)} users")
+                else:
+                    return self.log_test("Admin Get All Users", False, "- No users found or invalid response format")
+            else:
+                return self.log_test("Admin Get All Users", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Admin Get All Users", False, f"- Error: {str(e)}")
+
+    def test_admin_get_specific_user(self):
+        """Test GET /api/admin/users/{user_id}"""
+        if not hasattr(self, 'admin_token') or not self.admin_token:
+            return self.log_test("Admin Get Specific User", False, "- No admin authentication token")
+        
+        if not self.user_id:
+            return self.log_test("Admin Get Specific User", False, "- No user ID available")
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.admin_token}'}
+            response = requests.get(f"{self.api_url}/admin/users/{self.user_id}", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'id' in data and data['id'] == self.user_id:
+                    return self.log_test("Admin Get Specific User", True, f"- Retrieved user: {data.get('email')}")
+                else:
+                    return self.log_test("Admin Get Specific User", False, "- User ID mismatch in response")
+            else:
+                return self.log_test("Admin Get Specific User", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Admin Get Specific User", False, f"- Error: {str(e)}")
+
+    def test_admin_update_user(self):
+        """Test PUT /api/admin/users/{user_id}"""
+        if not hasattr(self, 'admin_token') or not self.admin_token:
+            return self.log_test("Admin Update User", False, "- No admin authentication token")
+        
+        if not self.user_id:
+            return self.log_test("Admin Update User", False, "- No user ID available")
+        
+        update_data = {
+            "role": "user",
+            "subscription_valid_until": "2024-12-31T23:59:59Z"
+        }
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.admin_token}', 'Content-Type': 'application/json'}
+            response = requests.put(f"{self.api_url}/admin/users/{self.user_id}", json=update_data, headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'message' in data:
+                    return self.log_test("Admin Update User", True, "- User updated successfully")
+                else:
+                    return self.log_test("Admin Update User", False, "- Missing success message")
+            else:
+                return self.log_test("Admin Update User", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Admin Update User", False, f"- Error: {str(e)}")
+
+    def test_admin_stats(self):
+        """Test GET /api/admin/stats"""
+        if not hasattr(self, 'admin_token') or not self.admin_token:
+            return self.log_test("Admin Stats", False, "- No admin authentication token")
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.admin_token}'}
+            response = requests.get(f"{self.api_url}/admin/stats", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ['total_users', 'total_invoices', 'active_subscriptions']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if not missing_fields:
+                    return self.log_test("Admin Stats", True, f"- Stats: {data['total_users']} users, {data['total_invoices']} invoices")
+                else:
+                    return self.log_test("Admin Stats", False, f"- Missing fields: {missing_fields}")
+            else:
+                return self.log_test("Admin Stats", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Admin Stats", False, f"- Error: {str(e)}")
+
+    def test_financial_summary(self):
+        """Test GET /api/reports/financial-summary"""
+        if not self.token:
+            return self.log_test("Financial Summary", False, "- No authentication token")
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.token}'}
+            response = requests.get(f"{self.api_url}/reports/financial-summary", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                required_fields = ['monthly_data', 'totals']
+                missing_fields = [field for field in required_fields if field not in data]
+                
+                if not missing_fields:
+                    monthly_count = len(data.get('monthly_data', []))
+                    return self.log_test("Financial Summary", True, f"- Retrieved {monthly_count} months of data")
+                else:
+                    return self.log_test("Financial Summary", False, f"- Missing fields: {missing_fields}")
+            else:
+                return self.log_test("Financial Summary", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Financial Summary", False, f"- Error: {str(e)}")
+
+    def test_non_admin_access_to_admin_endpoints(self):
+        """Test that non-admin users cannot access admin endpoints"""
+        if not self.token:
+            return self.log_test("Non-Admin Access Control", False, "- No authentication token")
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.token}'}
+            response = requests.get(f"{self.api_url}/admin/users", headers=headers, timeout=10)
+            
+            if response.status_code == 403:
+                return self.log_test("Non-Admin Access Control", True, "- Correctly blocked non-admin access")
+            else:
+                return self.log_test("Non-Admin Access Control", False, f"- Should block non-admin, got status: {response.status_code}")
+                
+        except Exception as e:
+            return self.log_test("Non-Admin Access Control", False, f"- Error: {str(e)}")
+
+    def test_admin_delete_user(self):
+        """Test DELETE /api/admin/users/{user_id} - This should be last as it deletes the test user"""
+        if not hasattr(self, 'admin_token') or not self.admin_token:
+            return self.log_test("Admin Delete User", False, "- No admin authentication token")
+        
+        if not self.user_id:
+            return self.log_test("Admin Delete User", False, "- No user ID available")
+        
+        try:
+            headers = {'Authorization': f'Bearer {self.admin_token}'}
+            response = requests.delete(f"{self.api_url}/admin/users/{self.user_id}", headers=headers, timeout=10)
+            
+            if response.status_code == 200:
+                data = response.json()
+                if 'message' in data:
+                    return self.log_test("Admin Delete User", True, "- User deleted successfully")
+                else:
+                    return self.log_test("Admin Delete User", False, "- Missing success message")
+            else:
+                return self.log_test("Admin Delete User", False, f"- Status: {response.status_code}, Response: {response.text}")
+                
+        except Exception as e:
+            return self.log_test("Admin Delete User", False, f"- Error: {str(e)}")
+
     def run_all_tests(self):
         """Run all backend API tests"""
         print("🚀 Starting Invoice Processing API Tests")
