@@ -564,6 +564,7 @@ class InvoiceAPITester:
         
         # Test invoice operations
         print("\n📄 Testing Invoice Operations...")
+        self.test_company_settings_setup()
         self.test_invoice_upload()
         self.test_get_invoices()
         self.test_get_specific_invoice()
