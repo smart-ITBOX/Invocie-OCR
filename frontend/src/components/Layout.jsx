@@ -166,10 +166,38 @@ export default function Layout({ children }) {
               </div>
             </div>
             <div className="flex items-center gap-3">
-              <div className="text-right mr-2">
-                <div className="text-sm font-medium text-white" data-testid="user-name-display">{user.name}</div>
-                <div className="text-[10px] text-white/60">{user.email}</div>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2 text-right mr-2 hover:bg-white/10 p-2 rounded-sm transition-all">
+                    <div>
+                      <div className="text-sm font-medium text-white" data-testid="user-name-display">{user.name}</div>
+                      <div className="text-[10px] text-white/60">{user.email}</div>
+                    </div>
+                    <User size={16} className="text-white/70" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuItem onClick={() => navigate('/profile')} data-testid="profile-menu-item">
+                    <User size={16} className="mr-2" />
+                    My Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate('/settings')}>
+                    <SettingsIcon size={16} className="mr-2" />
+                    Company Settings
+                  </DropdownMenuItem>
+                  {userProfile?.role === 'admin' && (
+                    <DropdownMenuItem onClick={() => navigate('/admin')}>
+                      <Shield size={16} className="mr-2" />
+                      Admin Panel
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogout} className="text-red-600">
+                    <LogOut size={16} className="mr-2" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Button
                 onClick={handleLogout}
                 variant="outline"
