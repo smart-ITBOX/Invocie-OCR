@@ -53,6 +53,7 @@ class User(BaseModel):
     email: str
     name: str
     role: str = "user"  # "user" or "admin"
+    is_active: bool = True  # Enable/disable user access
     subscription_valid_until: Optional[datetime] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
