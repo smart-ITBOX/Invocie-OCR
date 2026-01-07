@@ -54,16 +54,35 @@ class User(BaseModel):
     name: str
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+class CompanySettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    user_id: str
+    company_name: str
+    company_gst_no: str
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_number: Optional[str] = None
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class CompanySettingsUpdate(BaseModel):
+    company_name: str
+    company_gst_no: str
+    address: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_number: Optional[str] = None
+
 class InvoiceData(BaseModel):
     invoice_no: Optional[str] = None
     invoice_date: Optional[str] = None
     supplier_name: Optional[str] = None
     address: Optional[str] = None
     gst_no: Optional[str] = None
+    contact_person: Optional[str] = None
+    contact_number: Optional[str] = None
     basic_amount: Optional[float] = None
     gst: Optional[float] = None
     total_amount: Optional[float] = None
-    gst_rate: Optional[float] = None  # GST percentage
+    gst_rate: Optional[float] = None
     cgst: Optional[float] = None
     sgst: Optional[float] = None
     igst: Optional[float] = None
@@ -78,19 +97,25 @@ class ConfidenceScores(BaseModel):
     gst: float = 0.0
     total_amount: float = 0.0
 
+class ValidationFlags(BaseModel):
+    is_duplicate: bool = False
+    gst_mismatch: bool = False
+    duplicate_invoice_ids: List[str] = []
+
 class Invoice(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     user_id: str
-    invoice_type: str = "purchase"  # purchase or sales
+    invoice_type: str = "purchase"
     filename: str
     file_data: str
     file_type: str
     extracted_data: InvoiceData
     confidence_scores: ConfidenceScores
-    status: str = "pending"  # pending, verified, exported
-    month: Optional[str] = None  # YYYY-MM format
-    financial_year: Optional[str] = None  # e.g., "2024-25"
+    validation_flags: ValidationFlags = ValidationFlags()
+    status: str = "pending"
+    month: Optional[str] = None
+    financial_year: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -107,7 +132,7 @@ class BatchUploadResponse(BaseModel):
 
 class ExportRequest(BaseModel):
     invoice_ids: List[str]
-    format: str  # tally, csv, excel
+    format: str
 
 class MonthlyReport(BaseModel):
     month: str
@@ -142,13 +167,11 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
 def get_month_and_fy(date_str: str) -> tuple:
     """Extract month and financial year from date string"""
     try:
-        # Try DD/MM/YYYY format
         if '/' in date_str:
             parts = date_str.split('/')
             if len(parts) == 3:
                 day, month, year = parts
                 date_obj = datetime(int(year), int(month), int(day))
-        # Try YYYY-MM-DD format
         elif '-' in date_str:
             date_obj = datetime.fromisoformat(date_str.split('T')[0])
         else:
@@ -156,7 +179,6 @@ def get_month_and_fy(date_str: str) -> tuple:
         
         month_str = date_obj.strftime('%Y-%m')
         
-        # Calculate financial year (Apr-Mar)
         if date_obj.month >= 4:
             fy = f"{date_obj.year}-{str(date_obj.year + 1)[-2:]}"
         else:
@@ -166,26 +188,53 @@ def get_month_and_fy(date_str: str) -> tuple:
     except:
         return None, None
 
+async def check_duplicate_invoice(user_id: str, invoice_no: str, invoice_id: Optional[str] = None) -> tuple:
+    """Check if invoice number already exists"""
+    query = {
+        "user_id": user_id,
+        "extracted_data.invoice_no": invoice_no
+    }
+    if invoice_id:
+        query["id"] = {"$ne": invoice_id}
+    
+    duplicates = await db.invoices.find(query, {"_id": 0, "id": 1}).to_list(100)
+    is_duplicate = len(duplicates) > 0
+    duplicate_ids = [inv['id'] for inv in duplicates]
+    
+    return is_duplicate, duplicate_ids
+
+async def validate_gst_number(user_id: str, invoice_type: str, gst_no: str) -> bool:
+    """Validate GST number against company settings"""
+    settings = await db.company_settings.find_one({"user_id": user_id}, {"_id": 0})
+    
+    if not settings or not settings.get('company_gst_no'):
+        return False
+    
+    company_gst = settings['company_gst_no'].upper().strip()
+    invoice_gst = gst_no.upper().strip() if gst_no else ""
+    
+    if invoice_type == "purchase":
+        return invoice_gst != company_gst
+    else:
+        return invoice_gst == company_gst
+
 async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: str = "purchase") -> tuple[InvoiceData, ConfidenceScores]:
-    """Extract invoice data using OpenAI Vision API"""
+    """Extract invoice data using AI"""
     try:
         llm_key = os.environ.get('EMERGENT_LLM_KEY')
         if not llm_key:
             raise ValueError("EMERGENT_LLM_KEY not found")
 
-        # Initialize chat with Gemini (supports file attachments)
         chat = LlmChat(
             api_key=llm_key,
             session_id=str(uuid.uuid4()),
             system_message=f"You are an expert invoice data extraction assistant for {'purchase' if invoice_type == 'purchase' else 'sales'} invoices. Extract structured data accurately."
         ).with_model("gemini", "gemini-2.5-flash")
 
-        # Save file temporarily
         temp_file = f"/tmp/{uuid.uuid4()}_{filename}"
         with open(temp_file, "wb") as f:
             f.write(file_data)
 
-        # Determine mime type
         if filename.lower().endswith('.pdf'):
             mime_type = "application/pdf"
         elif filename.lower().endswith(('.jpg', '.jpeg')):
@@ -207,13 +256,15 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
             - Supplier/Vendor Name
             - Supplier Address
             - Supplier GST No
+            - Contact Person Name (if available)
+            - Contact Number/Phone (if available)
             - Basic Amount (taxable amount before GST)
             - GST Amount (total GST)
             - Total Amount (final payable amount)
             - GST Rate (percentage like 5, 12, 18, 28)
             - If GST is split, extract: CGST, SGST, IGST amounts
             
-            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name, address, gst_no, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
+            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name, address, gst_no, contact_person, contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
             Also include a confidence score (0-100) for each field.
             
             Format:
@@ -222,20 +273,22 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
                 "confidence": {"invoice_no": 95, ...}
             }
             """
-        else:  # sales
+        else:
             prompt = """Extract the following information from this SALES invoice:
             - Invoice No
             - Invoice Date (in DD/MM/YYYY format)
             - Customer/Buyer Name
             - Customer Address
             - Customer GST No
+            - Contact Person Name (if available)
+            - Contact Number/Phone (if available)
             - Basic Amount (taxable amount before GST)
             - GST Amount (total GST)
             - Total Amount (final receivable amount)
             - GST Rate (percentage like 5, 12, 18, 28)
             - If GST is split, extract: CGST, SGST, IGST amounts
             
-            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name (use customer name here), address, gst_no, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
+            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name (use customer name here), address, gst_no, contact_person, contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
             Also include a confidence score (0-100) for each field.
             
             Format:
@@ -252,29 +305,24 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
 
         response = await chat.send_message(user_message)
         
-        # Clean up temp file
         if os.path.exists(temp_file):
             os.remove(temp_file)
 
-        # Parse response
         import json
         import re
         response_text = response.strip()
         
-        # Try to extract JSON from markdown code blocks
         if "```json" in response_text:
             response_text = response_text.split("```json")[1].split("```")[0].strip()
         elif "```" in response_text:
             response_text = response_text.split("```")[1].split("```")[0].strip()
         
-        # Try to find JSON object using regex
         json_match = re.search(r'\{[\s\S]*\}', response_text)
         if json_match:
             response_text = json_match.group(0)
         
         result = json.loads(response_text)
         
-        # Extract data and confidence
         data = result.get("data", {})
         confidence = result.get("confidence", {})
         
@@ -295,7 +343,6 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
     except Exception as e:
         logging.error(f"Error extracting invoice data: {str(e)}")
         logging.error(f"Response was: {response if 'response' in locals() else 'No response'}")
-        # Return empty data with low confidence on error
         return InvoiceData(), ConfidenceScores(
             invoice_no=0.5, invoice_date=0.5, supplier_name=0.5, address=0.5,
             gst_no=0.5, basic_amount=0.5, gst=0.5, total_amount=0.5
@@ -304,12 +351,10 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
 # Routes
 @api_router.post("/auth/register")
 async def register(user_data: UserRegister):
-    # Check if user exists
     existing_user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
-    # Hash password
     password_hash = bcrypt.hashpw(user_data.password.encode(), bcrypt.gensalt()).decode()
     
     user = User(
@@ -352,27 +397,69 @@ async def login(credentials: UserLogin):
         "token": token
     }
 
+@api_router.get("/settings/company")
+async def get_company_settings(current_user: dict = Depends(get_current_user)):
+    settings = await db.company_settings.find_one(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    return settings or {}
+
+@api_router.post("/settings/company")
+async def update_company_settings(
+    settings_data: CompanySettingsUpdate,
+    current_user: dict = Depends(get_current_user)
+):
+    settings = CompanySettings(
+        user_id=current_user['user_id'],
+        **settings_data.model_dump()
+    )
+    
+    await db.company_settings.update_one(
+        {"user_id": current_user['user_id']},
+        {"$set": settings.model_dump()},
+        upsert=True
+    )
+    
+    return {"message": "Company settings updated successfully"}
+
 @api_router.post("/invoices/upload")
 async def upload_invoice(
     file: UploadFile = File(...),
     invoice_type: str = "purchase",
     current_user: dict = Depends(get_current_user)
 ):
-    # Validate file type
     allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']
     if file.content_type not in allowed_types:
         raise HTTPException(status_code=400, detail="Invalid file type. Only JPEG, PNG, and PDF are allowed.")
     
-    # Read file data
     file_data = await file.read()
     
-    # Extract data using AI
     extracted_data, confidence_scores = await extract_invoice_data(file_data, file.filename, invoice_type)
     
-    # Get month and FY from invoice date
     month, fy = get_month_and_fy(extracted_data.invoice_date or "")
     
-    # Store file as base64
+    # Check for duplicates and GST validation
+    is_duplicate, duplicate_ids = await check_duplicate_invoice(
+        current_user['user_id'],
+        extracted_data.invoice_no
+    )
+    
+    gst_mismatch = False
+    if extracted_data.gst_no:
+        gst_valid = await validate_gst_number(
+            current_user['user_id'],
+            invoice_type,
+            extracted_data.gst_no
+        )
+        gst_mismatch = not gst_valid
+    
+    validation_flags = ValidationFlags(
+        is_duplicate=is_duplicate,
+        gst_mismatch=gst_mismatch,
+        duplicate_invoice_ids=duplicate_ids
+    )
+    
     file_base64 = base64.b64encode(file_data).decode()
     
     invoice = Invoice(
@@ -383,6 +470,7 @@ async def upload_invoice(
         file_type=file.content_type,
         extracted_data=extracted_data,
         confidence_scores=confidence_scores,
+        validation_flags=validation_flags,
         month=month,
         financial_year=fy
     )
@@ -401,7 +489,6 @@ async def batch_upload_invoices(
     invoice_type: str = "purchase",
     current_user: dict = Depends(get_current_user)
 ):
-    """Upload multiple invoices at once"""
     if len(files) > 20:
         raise HTTPException(status_code=400, detail="Maximum 20 files allowed per batch")
     
@@ -411,22 +498,35 @@ async def batch_upload_invoices(
     
     for file in files:
         try:
-            # Validate file type
             allowed_types = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf']
             if file.content_type not in allowed_types:
                 failed += 1
                 continue
             
-            # Read file data
             file_data = await file.read()
-            
-            # Extract data using AI
             extracted_data, confidence_scores = await extract_invoice_data(file_data, file.filename, invoice_type)
-            
-            # Get month and FY from invoice date
             month, fy = get_month_and_fy(extracted_data.invoice_date or "")
             
-            # Store file as base64
+            is_duplicate, duplicate_ids = await check_duplicate_invoice(
+                current_user['user_id'],
+                extracted_data.invoice_no
+            )
+            
+            gst_mismatch = False
+            if extracted_data.gst_no:
+                gst_valid = await validate_gst_number(
+                    current_user['user_id'],
+                    invoice_type,
+                    extracted_data.gst_no
+                )
+                gst_mismatch = not gst_valid
+            
+            validation_flags = ValidationFlags(
+                is_duplicate=is_duplicate,
+                gst_mismatch=gst_mismatch,
+                duplicate_invoice_ids=duplicate_ids
+            )
+            
             file_base64 = base64.b64encode(file_data).decode()
             
             invoice = Invoice(
@@ -437,6 +537,7 @@ async def batch_upload_invoices(
                 file_type=file.content_type,
                 extracted_data=extracted_data,
                 confidence_scores=confidence_scores,
+                validation_flags=validation_flags,
                 month=month,
                 financial_year=fy
             )
@@ -463,11 +564,23 @@ async def batch_upload_invoices(
 @api_router.get("/invoices")
 async def get_invoices(
     invoice_type: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
     query = {"user_id": current_user['user_id']}
     if invoice_type:
         query["invoice_type"] = invoice_type
+    
+    # Date filter
+    if start_date or end_date:
+        date_query = {}
+        if start_date:
+            date_query["$gte"] = start_date
+        if end_date:
+            date_query["$lte"] = end_date
+        if date_query:
+            query["extracted_data.invoice_date"] = date_query
     
     invoices = await db.invoices.find(
         query,
@@ -513,14 +626,34 @@ async def update_invoice(
     if not invoice:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
-    # Recalculate month and FY if date changed
     month, fy = get_month_and_fy(update_data.extracted_data.invoice_date or "")
+    
+    # Re-check duplicates
+    is_duplicate, duplicate_ids = await check_duplicate_invoice(
+        current_user['user_id'],
+        update_data.extracted_data.invoice_no,
+        invoice_id
+    )
+    
+    # Re-check GST
+    gst_mismatch = False
+    if update_data.extracted_data.gst_no:
+        invoice_type = update_data.invoice_type or invoice.get('invoice_type', 'purchase')
+        gst_valid = await validate_gst_number(
+            current_user['user_id'],
+            invoice_type,
+            update_data.extracted_data.gst_no
+        )
+        gst_mismatch = not gst_valid
     
     update_dict = {
         "extracted_data": update_data.extracted_data.model_dump(),
         "updated_at": datetime.now(timezone.utc).isoformat(),
         "month": month,
-        "financial_year": fy
+        "financial_year": fy,
+        "validation_flags.is_duplicate": is_duplicate,
+        "validation_flags.gst_mismatch": gst_mismatch,
+        "validation_flags.duplicate_invoice_ids": duplicate_ids
     }
     
     if update_data.status:
@@ -549,11 +682,10 @@ async def delete_invoice(invoice_id: str, current_user: dict = Depends(get_curre
 
 @api_router.get("/reports/monthly")
 async def get_monthly_report(
-    month: Optional[str] = None,  # YYYY-MM format
-    financial_year: Optional[str] = None,  # e.g., "2024-25"
+    month: Optional[str] = None,
+    financial_year: Optional[str] = None,
     current_user: dict = Depends(get_current_user)
 ):
-    """Get monthly GST reconciliation report"""
     query = {"user_id": current_user['user_id'], "status": "verified"}
     
     if month:
@@ -563,7 +695,6 @@ async def get_monthly_report(
     
     invoices = await db.invoices.find(query, {"_id": 0}).to_list(10000)
     
-    # Calculate aggregates
     purchase_invoices = [inv for inv in invoices if inv.get('invoice_type') == 'purchase']
     sales_invoices = [inv for inv in invoices if inv.get('invoice_type') == 'sales']
     
@@ -573,7 +704,6 @@ async def get_monthly_report(
     total_purchase_gst = sum(inv['extracted_data'].get('gst', 0) for inv in purchase_invoices)
     total_sales_gst = sum(inv['extracted_data'].get('gst', 0) for inv in sales_invoices)
     
-    # GST breakdown by rate
     gst_breakdown = {
         "purchase": {},
         "sales": {}
@@ -611,7 +741,6 @@ async def get_monthly_report(
 
 @api_router.get("/reports/months")
 async def get_available_months(current_user: dict = Depends(get_current_user)):
-    """Get list of months with invoices"""
     pipeline = [
         {"$match": {"user_id": current_user['user_id'], "month": {"$ne": None}}},
         {"$group": {"_id": "$month"}},
@@ -634,11 +763,9 @@ async def export_invoices(
     ).to_list(1000)
     
     if export_request.format == "tally":
-        # Generate Tally XML
         xml_data = generate_tally_xml(invoices)
         return {"format": "tally", "data": xml_data}
     elif export_request.format == "csv":
-        # Generate CSV
         csv_data = generate_csv(invoices)
         return {"format": "csv", "data": csv_data}
     else:
@@ -678,7 +805,7 @@ def generate_tally_xml(invoices: List[Dict]) -> str:
     return xml
 
 def generate_csv(invoices: List[Dict]) -> str:
-    csv = "Type,Invoice No,Invoice Date,Party Name,Address,GST No,Basic Amount,GST,Total Amount,Status\n"
+    csv = "Type,Invoice No,Invoice Date,Party Name,Contact Person,Contact Number,Address,GST No,Basic Amount,GST,Total Amount,Status\n"
     
     for invoice in invoices:
         data = invoice['extracted_data']
@@ -687,6 +814,8 @@ def generate_csv(invoices: List[Dict]) -> str:
         csv += f"{data.get('invoice_no', '')},"
         csv += f"{data.get('invoice_date', '')},"
         csv += f"{data.get('supplier_name', '')},"
+        csv += f"{data.get('contact_person', '')},"
+        csv += f"{data.get('contact_number', '')},"
         csv += f"\"{data.get('address', '')}\","
         csv += f"{data.get('gst_no', '')},"
         csv += f"{data.get('basic_amount', '')},"
@@ -696,7 +825,6 @@ def generate_csv(invoices: List[Dict]) -> str:
     
     return csv
 
-# Include the router in the main app
 app.include_router(api_router)
 
 app.add_middleware(
@@ -707,7 +835,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
