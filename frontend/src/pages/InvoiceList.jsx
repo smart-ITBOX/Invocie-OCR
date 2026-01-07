@@ -430,13 +430,31 @@ export default function InvoiceList() {
                             {invoice.extracted_data?.invoice_no || 'N/A'}
                           </TableCell>
                           <TableCell className="text-sm">
-                            {invoice.extracted_data?.invoice_date || 'N/A'}
+                            {formatInvoiceDate(invoice.extracted_data?.invoice_date)}
                           </TableCell>
-                          <TableCell className="font-medium">
-                            {invoice.extracted_data?.supplier_name || 'Unknown'}
+                          <TableCell>
+                            <div>
+                              <div className="font-medium text-sm">
+                                {invoice.extracted_data?.supplier_name || 'N/A'}
+                              </div>
+                              {invoice.extracted_data?.supplier_gst_no && (
+                                <div className="text-xs text-muted-foreground font-mono">
+                                  {invoice.extracted_data.supplier_gst_no}
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
-                          <TableCell className="font-mono text-sm">
-                            {invoice.extracted_data?.gst_no || 'N/A'}
+                          <TableCell>
+                            <div>
+                              <div className="font-medium text-sm">
+                                {invoice.extracted_data?.buyer_name || 'N/A'}
+                              </div>
+                              {invoice.extracted_data?.buyer_gst_no && (
+                                <div className="text-xs text-muted-foreground font-mono">
+                                  {invoice.extracted_data.buyer_gst_no}
+                                </div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell className="text-right font-mono font-medium text-[#0B2B5C]">
                             ₹{(invoice.extracted_data?.total_amount || 0).toLocaleString('en-IN')}
