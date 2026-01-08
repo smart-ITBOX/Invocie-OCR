@@ -693,15 +693,15 @@ export default function BankReconciliation() {
                           </TableCell>
                           <TableCell>
                             <Select
-                              value={txn.mapped_buyer || ""}
-                              onValueChange={(value) => handleMapTransaction(txn.index, value)}
+                              value={txn.mapped_buyer || "unmapped"}
+                              onValueChange={(value) => handleMapTransaction(txn.index, value === "unmapped" ? null : value)}
                               disabled={savingMapping === txn.index}
                             >
                               <SelectTrigger className="w-full">
                                 <SelectValue placeholder="Select buyer..." />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="">-- Not Mapped --</SelectItem>
+                                <SelectItem value="unmapped">-- Not Mapped --</SelectItem>
                                 {statementTransactions.buyers.map((buyer) => (
                                   <SelectItem key={buyer.name} value={buyer.name}>
                                     {buyer.name} {buyer.gst && `(${buyer.gst.slice(0,10)}...)`}
