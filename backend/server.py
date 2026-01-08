@@ -1006,9 +1006,17 @@ async def upload_bank_statement(
         except:
             extracted_text = content.decode('latin-1')
     
+    elif filename.endswith(('.xlsx', '.xls')):
+        # Convert Excel to text using pandas
+        try:
+            df = pd.read_excel(io.BytesIO(content))
+            # Convert dataframe to CSV-like text
+            extracted_text = df.to_csv(index=False)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read Excel file: {str(e)}")
+    
     else:
-        # For Excel files, we'll send the raw content to AI
-        extracted_text = f"[Excel file: {file.filename}]"
+        raise HTTPException(status_code=400, detail="Unsupported file format")
     
     # Use AI to extract transactions
     llm_key = os.environ.get("EMERGENT_LLM_KEY")
