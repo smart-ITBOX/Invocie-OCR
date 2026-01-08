@@ -1015,7 +1015,7 @@ async def upload_bank_statement(
         api_key=llm_key,
         session_id=str(uuid.uuid4()),
         system_message="You are an expert bank statement data extraction assistant. Extract transaction data accurately from any bank statement format."
-    ).with_model("openai", "gpt-4o")
+    ).with_model("gemini", "gemini-2.5-flash")
     
     extraction_prompt = """Analyze this bank statement and extract all transactions. 
     
