@@ -1528,21 +1528,32 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
     buyer_names = list(buyer_invoices.keys())
     
     for payment in all_payments:
-        party_name = (payment.get('party_name') or '').strip()
-        description = (payment.get('description') or '').strip()
+        # Check for manual mapping first
+        manual_buyer = payment.get('manual_mapping')
         
-        # Combine party name and description for matching
-        payment_text = f"{party_name} {description}"
-        
-        # Find best matching buyer
-        matched_buyer, match_score = find_best_buyer_match(payment_text, buyer_names)
-        
-        if matched_buyer:
-            payment_with_match = {**payment, "match_score": match_score, "matched_text": payment_text[:100]}
+        if manual_buyer and manual_buyer.upper() in buyer_invoices:
+            # Use manual mapping
+            matched_buyer = manual_buyer.upper()
+            payment_with_match = {**payment, "match_score": 100, "match_type": "manual"}
             buyer_payments[matched_buyer]['payments'].append(payment_with_match)
             buyer_payments[matched_buyer]['total_received'] += float(payment.get('credit', 0) or 0)
         else:
-            unmatched_payments.append({**payment, "search_text": payment_text[:100]})
+            # Try fuzzy matching
+            party_name = (payment.get('party_name') or '').strip()
+            description = (payment.get('description') or '').strip()
+            
+            # Combine party name and description for matching
+            payment_text = f"{party_name} {description}"
+            
+            # Find best matching buyer
+            matched_buyer, match_score = find_best_buyer_match(payment_text, buyer_names)
+            
+            if matched_buyer:
+                payment_with_match = {**payment, "match_score": match_score, "match_type": "auto", "matched_text": payment_text[:100]}
+                buyer_payments[matched_buyer]['payments'].append(payment_with_match)
+                buyer_payments[matched_buyer]['total_received'] += float(payment.get('credit', 0) or 0)
+            else:
+                unmatched_payments.append({**payment, "search_text": payment_text[:100]})
     
     # Build outstanding report
     outstanding_report = []
