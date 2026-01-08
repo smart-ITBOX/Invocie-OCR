@@ -17,6 +17,7 @@ import base64
 import io
 from pypdf import PdfReader
 import asyncio
+import pandas as pd
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
