@@ -229,6 +229,11 @@ export default function BankReconciliation() {
   const getFilteredTransactions = () => {
     if (!statementTransactions) return [];
     return statementTransactions.transactions.filter(t => {
+      // First filter by amount - only show transactions with valid amounts
+      const amount = transactionType === 'credit' ? t.credit : t.debit;
+      if (!amount || parseFloat(amount) <= 0) return false;
+      
+      // Then filter by search term
       if (!transactionSearch) return true;
       const search = transactionSearch.toLowerCase();
       return (
