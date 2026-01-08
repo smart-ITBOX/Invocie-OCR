@@ -1064,27 +1064,34 @@ IMPORTANT:
     
     try:
         if filename.endswith(('.xlsx', '.xls')):
-            # Send Excel as file content
-            file_content = FileContentWithMimeType(
-                content=base64.b64encode(content).decode(),
-                mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if filename.endswith('.xlsx') else "application/vnd.ms-excel"
-            )
+            # For Excel files, save temporarily and use file path
+            temp_file = f"/tmp/{uuid.uuid4()}_{file.filename}"
+            with open(temp_file, "wb") as f:
+                f.write(content)
+            
+            mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if filename.endswith('.xlsx') else "application/vnd.ms-excel"
+            
             response = await asyncio.to_thread(
                 chat.send_message,
                 [
                     UserMessage(
                         content=extraction_prompt,
-                        file_content=file_content
+                        file_path=temp_file,
+                        mime_type=mime_type
                     )
-                ],
-                model="gpt-4o"
+                ]
             )
+            
+            # Clean up temp file
+            try:
+                os.remove(temp_file)
+            except:
+                pass
         else:
-            # Send text content
+            # Send text content for PDF/CSV
             response = await asyncio.to_thread(
                 chat.send_message,
-                [UserMessage(content=f"{extraction_prompt}\n\nBank Statement Content:\n{extracted_text[:15000]}")],
-                model="gpt-4o"
+                [UserMessage(content=f"{extraction_prompt}\n\nBank Statement Content:\n{extracted_text[:15000]}")]
             )
         
         # Parse AI response
