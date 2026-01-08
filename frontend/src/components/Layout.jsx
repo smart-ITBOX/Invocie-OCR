@@ -191,6 +191,18 @@ export default function Layout({ children }) {
                       <BarChart3 size={18} />
                       Reports
                     </button>
+                    <button
+                      onClick={() => navigate('/bank-reconciliation')}
+                      data-testid="nav-bank-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                        location.pathname === '/bank-reconciliation' 
+                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
+                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <CreditCard size={18} />
+                      Bank Recon
+                    </button>
                   </>
                 )}
               </div>
