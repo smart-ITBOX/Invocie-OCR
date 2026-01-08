@@ -1077,34 +1077,52 @@ IMPORTANT:
 - Try to identify party names from NEFT/IMPS/UPI descriptions
 """
     
-    try:
-        # For all formats, we now have extracted_text, so send as text file
-        temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
-        with open(temp_file, "w") as f:
-            f.write(extracted_text)
-        
-        file_content = FileContentWithMimeType(
-            file_path=temp_file,
-            mime_type="text/plain"
-        )
-        
-        user_message = UserMessage(
-            text=extraction_prompt,
-            file_contents=[file_content]
-        )
-        
-        response = await chat.send_message(user_message)
-        
-        # Clean up temp file
+    # For all formats, we now have extracted_text, so send as text file
+    temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
+    with open(temp_file, "w") as f:
+        f.write(extracted_text)
+    
+    last_error = None
+    response = None
+    
+    for provider, model in models_to_try:
         try:
-            os.remove(temp_file)
-        except:
-            pass
-        
-        # Check if response is valid
-        if response is None:
-            raise HTTPException(status_code=500, detail="AI returned empty response")
-        
+            chat = LlmChat(
+                api_key=llm_key,
+                session_id=str(uuid.uuid4()),
+                system_message="You are an expert bank statement data extraction assistant. Extract transaction data accurately from any bank statement format."
+            ).with_model(provider, model)
+            
+            file_content = FileContentWithMimeType(
+                file_path=temp_file,
+                mime_type="text/plain"
+            )
+            
+            user_message = UserMessage(
+                text=extraction_prompt,
+                file_contents=[file_content]
+            )
+            
+            response = await chat.send_message(user_message)
+            
+            if response:
+                logging.info(f"Successfully used {provider}/{model} for bank statement extraction")
+                break
+        except Exception as e:
+            last_error = str(e)
+            logging.warning(f"Failed with {provider}/{model}: {str(e)}, trying next model...")
+            continue
+    
+    # Clean up temp file
+    try:
+        os.remove(temp_file)
+    except:
+        pass
+    
+    if response is None:
+        raise HTTPException(status_code=500, detail=f"All AI models failed. Last error: {last_error}")
+    
+    try:
         # Parse AI response
         response_text = response.strip() if isinstance(response, str) else str(response)
         if response_text.startswith("```json"):
