@@ -1262,7 +1262,8 @@ async def delete_bank_statement(statement_id: str, current_user: dict = Depends(
 
 @api_router.get("/bank-reconciliation/outstanding")
 async def get_outstanding_report(current_user: dict = Depends(get_current_user)):
-    """Generate outstanding report by matching invoices with bank payments"""
+    """Generate outstanding report by matching invoices with bank payments using fuzzy matching"""
+    from fuzzywuzzy import fuzz
     
     # Get all sales invoices for the user
     sales_invoices = await db.invoices.find(
@@ -1280,7 +1281,7 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
     all_payments = []
     for statement in bank_statements:
         for txn in statement.get('transactions', []):
-            if txn.get('credit') and txn['credit'] > 0:
+            if txn.get('credit') and float(txn['credit'] or 0) > 0:
                 all_payments.append(txn)
     
     # Group invoices by buyer
@@ -1298,7 +1299,7 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
                 "invoices": []
             }
         
-        amount = ext_data.get('total_amount') or 0
+        amount = float(ext_data.get('total_amount') or 0)
         buyer_invoices[buyer_name]['total_sales'] += amount
         buyer_invoices[buyer_name]['invoices'].append({
             "invoice_id": invoice.get('id'),
@@ -1307,32 +1308,58 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
             "amount": amount
         })
     
-    # Match payments with buyers using AI-assisted fuzzy matching
+    # Helper function for fuzzy matching
+    def find_best_buyer_match(payment_text, buyer_names, threshold=60):
+        """Find the best matching buyer name using fuzzy matching"""
+        payment_text = payment_text.upper()
+        best_match = None
+        best_score = 0
+        
+        for buyer_name in buyer_names:
+            # Try different matching strategies
+            
+            # 1. Direct partial match
+            score1 = fuzz.partial_ratio(buyer_name, payment_text)
+            
+            # 2. Token set ratio (handles word order differences)
+            score2 = fuzz.token_set_ratio(buyer_name, payment_text)
+            
+            # 3. Check if significant words match
+            buyer_words = [w for w in buyer_name.split() if len(w) > 3]
+            word_matches = sum(1 for w in buyer_words if w in payment_text)
+            word_score = (word_matches / len(buyer_words) * 100) if buyer_words else 0
+            
+            # Take the best score from all strategies
+            score = max(score1, score2, word_score)
+            
+            if score > best_score and score >= threshold:
+                best_score = score
+                best_match = buyer_name
+        
+        return best_match, best_score
+    
+    # Match payments with buyers using fuzzy matching
     buyer_payments = {name: {"payments": [], "total_received": 0} for name in buyer_invoices.keys()}
     unmatched_payments = []
     
+    buyer_names = list(buyer_invoices.keys())
+    
     for payment in all_payments:
-        party_name = (payment.get('party_name') or '').strip().upper()
-        description = (payment.get('description') or '').upper()
-        matched = False
+        party_name = (payment.get('party_name') or '').strip()
+        description = (payment.get('description') or '').strip()
         
-        # Try to match with buyer names
-        for buyer_name in buyer_invoices.keys():
-            # Check if buyer name appears in party_name or description
-            buyer_words = buyer_name.split()
-            if len(buyer_words) > 0:
-                # Match if any significant word (>3 chars) from buyer name appears
-                for word in buyer_words:
-                    if len(word) > 3 and (word in party_name or word in description):
-                        buyer_payments[buyer_name]['payments'].append(payment)
-                        buyer_payments[buyer_name]['total_received'] += payment.get('credit', 0)
-                        matched = True
-                        break
-            if matched:
-                break
+        # Combine party name and description for matching
+        payment_text = f"{party_name} {description}"
         
-        if not matched:
-            unmatched_payments.append(payment)
+        # Find best matching buyer
+        matched_buyer, match_score = find_best_buyer_match(payment_text, buyer_names)
+        
+        if matched_buyer:
+            payment_with_match = {**payment, "match_score": match_score, "matched_text": payment_text[:100]}
+            buyer_payments[matched_buyer]['payments'].append(payment_with_match)
+            buyer_payments[matched_buyer]['total_received'] += float(payment.get('credit', 0) or 0)
+        else:
+            unmatched_payments.append({**payment, "search_text": payment_text[:100]})
     
     # Build outstanding report
     outstanding_report = []
@@ -1348,7 +1375,8 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
             "outstanding": round(data['total_sales'] - total_received, 2),
             "invoice_count": len(data['invoices']),
             "invoices": data['invoices'],
-            "payments": payments
+            "payments": payments,
+            "payment_count": len(payments)
         })
     
     # Sort by outstanding amount (highest first)
@@ -1365,7 +1393,8 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
             "total_received": round(total_received, 2),
             "total_outstanding": round(total_outstanding, 2),
             "buyer_count": len(outstanding_report),
-            "unmatched_payments_count": len(unmatched_payments)
+            "unmatched_payments_count": len(unmatched_payments),
+            "total_payments": len(all_payments)
         },
         "buyers": outstanding_report,
         "unmatched_payments": unmatched_payments
