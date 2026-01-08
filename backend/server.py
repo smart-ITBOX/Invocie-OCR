@@ -970,6 +970,306 @@ def generate_csv(invoices: List[Dict]) -> str:
     
     return csv
 
+# ============= Bank Reconciliation Endpoints =============
+
+@api_router.post("/bank-statement/upload")
+async def upload_bank_statement(
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Upload bank statement (PDF or Excel) and extract transactions using AI"""
+    
+    # Validate file type
+    filename = file.filename.lower()
+    if not (filename.endswith('.pdf') or filename.endswith('.xlsx') or filename.endswith('.xls') or filename.endswith('.csv')):
+        raise HTTPException(status_code=400, detail="Only PDF, Excel (.xlsx, .xls) and CSV files are supported")
+    
+    content = await file.read()
+    
+    # Extract text based on file type
+    extracted_text = ""
+    
+    if filename.endswith('.pdf'):
+        # Extract text from PDF
+        try:
+            pdf_reader = PdfReader(io.BytesIO(content))
+            for page in pdf_reader.pages:
+                extracted_text += page.extract_text() + "\n"
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Failed to read PDF: {str(e)}")
+    
+    elif filename.endswith('.csv'):
+        # Read CSV content directly
+        try:
+            extracted_text = content.decode('utf-8')
+        except:
+            extracted_text = content.decode('latin-1')
+    
+    else:
+        # For Excel files, we'll send the raw content to AI
+        extracted_text = f"[Excel file: {file.filename}]"
+    
+    # Use AI to extract transactions
+    chat = LlmChat(api_key=os.environ.get("EMERGENT_API_KEY"))
+    
+    extraction_prompt = """Analyze this bank statement and extract all transactions. 
+    
+For each transaction, extract:
+- date: Transaction date (format as YYYY-MM-DD if possible)
+- description: Full description/narration
+- credit: Amount credited (incoming payment) - as number only
+- debit: Amount debited (outgoing payment) - as number only  
+- balance: Running balance after transaction - as number only
+- party_name: Try to identify the party name from the description (person/company who paid or received)
+- reference_no: Any reference/UTR/cheque number
+
+Return a JSON object with this structure:
+{
+    "account_info": {
+        "account_number": "if found",
+        "bank_name": "if found",
+        "account_holder": "if found",
+        "statement_period": "if found"
+    },
+    "transactions": [
+        {
+            "date": "2024-01-15",
+            "description": "NEFT FROM ABC COMPANY",
+            "credit": 50000,
+            "debit": null,
+            "balance": 150000,
+            "party_name": "ABC COMPANY",
+            "reference_no": "NEFT123456"
+        }
+    ],
+    "summary": {
+        "total_credits": 100000,
+        "total_debits": 50000,
+        "opening_balance": 100000,
+        "closing_balance": 150000
+    }
+}
+
+IMPORTANT: 
+- Return ONLY valid JSON, no explanations
+- For credit/debit/balance, use numbers only (no currency symbols)
+- If a field is not found, use null
+- Try to identify party names from NEFT/IMPS/UPI descriptions
+"""
+    
+    try:
+        if filename.endswith(('.xlsx', '.xls')):
+            # Send Excel as file content
+            file_content = FileContentWithMimeType(
+                content=base64.b64encode(content).decode(),
+                mime_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if filename.endswith('.xlsx') else "application/vnd.ms-excel"
+            )
+            response = await asyncio.to_thread(
+                chat.send_message,
+                [
+                    UserMessage(
+                        content=extraction_prompt,
+                        file_content=file_content
+                    )
+                ],
+                model="gpt-4o"
+            )
+        else:
+            # Send text content
+            response = await asyncio.to_thread(
+                chat.send_message,
+                [UserMessage(content=f"{extraction_prompt}\n\nBank Statement Content:\n{extracted_text[:15000]}")],
+                model="gpt-4o"
+            )
+        
+        # Parse AI response
+        response_text = response.content.strip()
+        if response_text.startswith("```json"):
+            response_text = response_text[7:]
+        if response_text.startswith("```"):
+            response_text = response_text[3:]
+        if response_text.endswith("```"):
+            response_text = response_text[:-3]
+        
+        import json
+        extracted_data = json.loads(response_text.strip())
+        
+    except Exception as e:
+        logging.error(f"AI extraction failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to extract transactions: {str(e)}")
+    
+    # Store the bank statement
+    bank_statement = {
+        "id": str(uuid.uuid4()),
+        "user_id": current_user['user_id'],
+        "filename": file.filename,
+        "upload_date": datetime.now(timezone.utc).isoformat(),
+        "transactions": extracted_data.get('transactions', []),
+        "total_credits": extracted_data.get('summary', {}).get('total_credits', 0),
+        "total_debits": extracted_data.get('summary', {}).get('total_debits', 0),
+        "account_info": extracted_data.get('account_info', {})
+    }
+    
+    await db.bank_statements.insert_one(bank_statement)
+    
+    # Remove _id for response
+    bank_statement.pop('_id', None)
+    
+    return {
+        "message": "Bank statement uploaded and processed successfully",
+        "statement_id": bank_statement['id'],
+        "transactions_count": len(bank_statement['transactions']),
+        "total_credits": bank_statement['total_credits'],
+        "total_debits": bank_statement['total_debits'],
+        "account_info": bank_statement['account_info']
+    }
+
+@api_router.get("/bank-statement/list")
+async def list_bank_statements(current_user: dict = Depends(get_current_user)):
+    """Get all uploaded bank statements for current user"""
+    statements = await db.bank_statements.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0, "transactions": 0}
+    ).sort("upload_date", -1).to_list(100)
+    
+    return statements
+
+@api_router.get("/bank-statement/{statement_id}")
+async def get_bank_statement(statement_id: str, current_user: dict = Depends(get_current_user)):
+    """Get a specific bank statement with transactions"""
+    statement = await db.bank_statements.find_one(
+        {"id": statement_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+    
+    return statement
+
+@api_router.delete("/bank-statement/{statement_id}")
+async def delete_bank_statement(statement_id: str, current_user: dict = Depends(get_current_user)):
+    """Delete a bank statement"""
+    result = await db.bank_statements.delete_one(
+        {"id": statement_id, "user_id": current_user['user_id']}
+    )
+    
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+    
+    return {"message": "Bank statement deleted successfully"}
+
+@api_router.get("/bank-reconciliation/outstanding")
+async def get_outstanding_report(current_user: dict = Depends(get_current_user)):
+    """Generate outstanding report by matching invoices with bank payments"""
+    
+    # Get all sales invoices for the user
+    sales_invoices = await db.invoices.find(
+        {"user_id": current_user['user_id'], "invoice_type": "sales"},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    # Get all bank statements and their transactions
+    bank_statements = await db.bank_statements.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Collect all credit transactions (payments received)
+    all_payments = []
+    for statement in bank_statements:
+        for txn in statement.get('transactions', []):
+            if txn.get('credit') and txn['credit'] > 0:
+                all_payments.append(txn)
+    
+    # Group invoices by buyer
+    buyer_invoices = {}
+    for invoice in sales_invoices:
+        ext_data = invoice.get('extracted_data', {})
+        buyer_name = ext_data.get('bill_to_name') or ext_data.get('buyer_name') or 'Unknown Buyer'
+        buyer_name = buyer_name.strip().upper()
+        
+        if buyer_name not in buyer_invoices:
+            buyer_invoices[buyer_name] = {
+                "buyer_name": buyer_name,
+                "buyer_gst": ext_data.get('bill_to_gst') or ext_data.get('buyer_gst'),
+                "total_sales": 0,
+                "invoices": []
+            }
+        
+        amount = ext_data.get('total_amount') or 0
+        buyer_invoices[buyer_name]['total_sales'] += amount
+        buyer_invoices[buyer_name]['invoices'].append({
+            "invoice_id": invoice.get('id'),
+            "invoice_no": ext_data.get('invoice_no'),
+            "invoice_date": ext_data.get('invoice_date'),
+            "amount": amount
+        })
+    
+    # Match payments with buyers using AI-assisted fuzzy matching
+    buyer_payments = {name: {"payments": [], "total_received": 0} for name in buyer_invoices.keys()}
+    unmatched_payments = []
+    
+    for payment in all_payments:
+        party_name = (payment.get('party_name') or '').strip().upper()
+        description = (payment.get('description') or '').upper()
+        matched = False
+        
+        # Try to match with buyer names
+        for buyer_name in buyer_invoices.keys():
+            # Check if buyer name appears in party_name or description
+            buyer_words = buyer_name.split()
+            if len(buyer_words) > 0:
+                # Match if any significant word (>3 chars) from buyer name appears
+                for word in buyer_words:
+                    if len(word) > 3 and (word in party_name or word in description):
+                        buyer_payments[buyer_name]['payments'].append(payment)
+                        buyer_payments[buyer_name]['total_received'] += payment.get('credit', 0)
+                        matched = True
+                        break
+            if matched:
+                break
+        
+        if not matched:
+            unmatched_payments.append(payment)
+    
+    # Build outstanding report
+    outstanding_report = []
+    for buyer_name, data in buyer_invoices.items():
+        total_received = buyer_payments.get(buyer_name, {}).get('total_received', 0)
+        payments = buyer_payments.get(buyer_name, {}).get('payments', [])
+        
+        outstanding_report.append({
+            "buyer_name": buyer_name,
+            "buyer_gst": data.get('buyer_gst'),
+            "total_sales": round(data['total_sales'], 2),
+            "total_received": round(total_received, 2),
+            "outstanding": round(data['total_sales'] - total_received, 2),
+            "invoice_count": len(data['invoices']),
+            "invoices": data['invoices'],
+            "payments": payments
+        })
+    
+    # Sort by outstanding amount (highest first)
+    outstanding_report.sort(key=lambda x: x['outstanding'], reverse=True)
+    
+    # Calculate totals
+    total_sales = sum(r['total_sales'] for r in outstanding_report)
+    total_received = sum(r['total_received'] for r in outstanding_report)
+    total_outstanding = sum(r['outstanding'] for r in outstanding_report)
+    
+    return {
+        "summary": {
+            "total_sales": round(total_sales, 2),
+            "total_received": round(total_received, 2),
+            "total_outstanding": round(total_outstanding, 2),
+            "buyer_count": len(outstanding_report),
+            "unmatched_payments_count": len(unmatched_payments)
+        },
+        "buyers": outstanding_report,
+        "unmatched_payments": unmatched_payments
+    }
+
 # ============= User Profile Endpoints =============
 
 @api_router.get("/users/me")
