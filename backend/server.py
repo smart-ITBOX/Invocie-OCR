@@ -1112,14 +1112,35 @@ IMPORTANT:
             except:
                 pass
         else:
-            # Send text content for CSV
-            user_message = UserMessage(
-                text=f"{extraction_prompt}\n\nBank Statement Content:\n{extracted_text[:15000]}"
+            # For CSV, save as text file temporarily
+            temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
+            with open(temp_file, "w") as f:
+                f.write(extracted_text)
+            
+            file_content = FileContentWithMimeType(
+                file_path=temp_file,
+                mime_type="text/plain"
             )
+            
+            user_message = UserMessage(
+                text=extraction_prompt,
+                file_contents=[file_content]
+            )
+            
             response = await chat.send_message(user_message)
+            
+            # Clean up temp file
+            try:
+                os.remove(temp_file)
+            except:
+                pass
+        
+        # Check if response is valid
+        if response is None:
+            raise HTTPException(status_code=500, detail="AI returned empty response")
         
         # Parse AI response
-        response_text = response.strip()
+        response_text = response.strip() if isinstance(response, str) else str(response)
         if response_text.startswith("```json"):
             response_text = response_text[7:]
         if response_text.startswith("```"):
