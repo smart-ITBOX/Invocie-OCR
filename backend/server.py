@@ -1404,11 +1404,17 @@ async def delete_bank_statement(statement_id: str, current_user: dict = Depends(
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Bank statement not found")
     
+    # Also delete mappings for this statement
+    await db.bank_transaction_mappings.delete_many({
+        "user_id": current_user['user_id'],
+        "statement_id": statement_id
+    })
+    
     return {"message": "Bank statement deleted successfully"}
 
 @api_router.get("/bank-reconciliation/outstanding")
 async def get_outstanding_report(current_user: dict = Depends(get_current_user)):
-    """Generate outstanding report by matching invoices with bank payments using fuzzy matching"""
+    """Generate outstanding report by matching invoices with bank payments using fuzzy matching and manual mappings"""
     from fuzzywuzzy import fuzz
     
     # Get all sales invoices for the user
@@ -1422,6 +1428,37 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
         {"user_id": current_user['user_id']},
         {"_id": 0}
     ).to_list(100)
+    
+    # Get all manual mappings
+    manual_mappings = await db.bank_transaction_mappings.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    # Create mapping lookup: {statement_id: {transaction_index: buyer_name}}
+    mapping_lookup = {}
+    for m in manual_mappings:
+        stmt_id = m.get('statement_id')
+        txn_idx = m.get('transaction_index')
+        if stmt_id not in mapping_lookup:
+            mapping_lookup[stmt_id] = {}
+        mapping_lookup[stmt_id][txn_idx] = m.get('buyer_name')
+    
+    # Collect all credit transactions (payments received) with statement info
+    all_payments = []
+    for statement in bank_statements:
+        stmt_id = statement.get('id')
+        stmt_mappings = mapping_lookup.get(stmt_id, {})
+        
+        for idx, txn in enumerate(statement.get('transactions', [])):
+            if txn.get('credit') and float(txn['credit'] or 0) > 0:
+                txn_with_info = {
+                    **txn,
+                    "statement_id": stmt_id,
+                    "transaction_index": idx,
+                    "manual_mapping": stmt_mappings.get(idx)
+                }
+                all_payments.append(txn_with_info)
     
     # Collect all credit transactions (payments received)
     all_payments = []
