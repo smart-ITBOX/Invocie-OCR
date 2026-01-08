@@ -1131,20 +1131,69 @@ IMPORTANT:
     try:
         # Parse AI response
         response_text = response.strip() if isinstance(response, str) else str(response)
-        if response_text.startswith("```json"):
-            response_text = response_text[7:]
-        if response_text.startswith("```"):
-            response_text = response_text[3:]
-        if response_text.endswith("```"):
-            response_text = response_text[:-3]
         
+        # Remove markdown code blocks
+        if "```json" in response_text:
+            response_text = response_text.split("```json")[1].split("```")[0]
+        elif "```" in response_text:
+            parts = response_text.split("```")
+            if len(parts) >= 2:
+                response_text = parts[1]
+        
+        # Try to find JSON object in the response
         import json
         import re
+        
+        # Clean up common JSON issues
+        response_text = response_text.strip()
+        
+        # Try to extract just the JSON object
         json_match = re.search(r'\{[\s\S]*\}', response_text)
         if json_match:
             response_text = json_match.group(0)
         
-        extracted_data = json.loads(response_text.strip())
+        # Fix common JSON errors
+        # Remove trailing commas before ] or }
+        response_text = re.sub(r',(\s*[}\]])', r'\1', response_text)
+        # Fix unquoted keys (simple cases)
+        response_text = re.sub(r'(\{|\,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', response_text)
+        
+        try:
+            extracted_data = json.loads(response_text.strip())
+        except json.JSONDecodeError as je:
+            # If JSON parsing fails, try to extract transactions manually
+            logging.warning(f"JSON parse error: {str(je)}, attempting manual extraction")
+            
+            # Create a minimal valid response
+            extracted_data = {
+                "account_info": {},
+                "transactions": [],
+                "summary": {
+                    "total_credits": 0,
+                    "total_debits": 0
+                }
+            }
+            
+            # Try to find transactions array
+            trans_match = re.search(r'"transactions"\s*:\s*\[([\s\S]*?)\]', response_text)
+            if trans_match:
+                trans_text = trans_match.group(1)
+                # Try to parse individual transaction objects
+                trans_objects = re.findall(r'\{[^{}]*\}', trans_text)
+                for t_obj in trans_objects:
+                    try:
+                        t_obj_clean = re.sub(r',(\s*[}\]])', r'\1', t_obj)
+                        trans = json.loads(t_obj_clean)
+                        extracted_data["transactions"].append(trans)
+                    except:
+                        continue
+            
+            # Calculate totals from extracted transactions
+            for t in extracted_data["transactions"]:
+                if t.get("credit"):
+                    extracted_data["summary"]["total_credits"] += float(t.get("credit", 0) or 0)
+                if t.get("debit"):
+                    extracted_data["summary"]["total_debits"] += float(t.get("debit", 0) or 0)
         
     except Exception as e:
         logging.error(f"AI extraction failed: {str(e)}")
@@ -1157,8 +1206,8 @@ IMPORTANT:
         "filename": file.filename,
         "upload_date": datetime.now(timezone.utc).isoformat(),
         "transactions": extracted_data.get('transactions', []),
-        "total_credits": extracted_data.get('summary', {}).get('total_credits', 0),
-        "total_debits": extracted_data.get('summary', {}).get('total_debits', 0),
+        "total_credits": extracted_data.get('summary', {}).get('total_credits', 0) or 0,
+        "total_debits": extracted_data.get('summary', {}).get('total_debits', 0) or 0,
         "account_info": extracted_data.get('account_info', {})
     }
     
