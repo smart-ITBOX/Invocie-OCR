@@ -1010,7 +1010,12 @@ async def upload_bank_statement(
         extracted_text = f"[Excel file: {file.filename}]"
     
     # Use AI to extract transactions
-    llm_key = os.environ.get("EMERGENT_API_KEY")
+    llm_key = os.environ.get("EMERGENT_LLM_KEY")
+    if not llm_key:
+        llm_key = os.environ.get("EMERGENT_API_KEY")
+    if not llm_key:
+        raise HTTPException(status_code=500, detail="LLM API key not configured")
+    
     chat = LlmChat(
         api_key=llm_key,
         session_id=str(uuid.uuid4()),
