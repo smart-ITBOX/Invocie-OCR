@@ -169,6 +169,36 @@ class UserResponse(BaseModel):
     subscription_valid_until: Optional[str] = None
     created_at: str
 
+class BankTransaction(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    date: Optional[str] = None
+    description: str
+    credit: Optional[float] = None
+    debit: Optional[float] = None
+    balance: Optional[float] = None
+    party_name: Optional[str] = None
+    reference_no: Optional[str] = None
+
+class BankStatement(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    user_id: str
+    filename: str
+    upload_date: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    transactions: List[Dict[str, Any]] = []
+    total_credits: float = 0
+    total_debits: float = 0
+    account_info: Optional[Dict[str, Any]] = None
+
+class OutstandingReport(BaseModel):
+    buyer_name: str
+    buyer_gst: Optional[str] = None
+    total_sales: float = 0
+    total_received: float = 0
+    outstanding: float = 0
+    invoices: List[Dict[str, Any]] = []
+    payments: List[Dict[str, Any]] = []
+
 class MonthlyReport(BaseModel):
     month: str
     purchase_invoices: int
