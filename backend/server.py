@@ -1289,6 +1289,111 @@ async def get_bank_statement(statement_id: str, current_user: dict = Depends(get
     
     return statement
 
+@api_router.get("/bank-statement/{statement_id}/transactions")
+async def get_bank_statement_transactions(statement_id: str, current_user: dict = Depends(get_current_user)):
+    """Get transactions from a bank statement with buyer mapping info"""
+    statement = await db.bank_statements.find_one(
+        {"id": statement_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+    
+    # Get all buyers from sales invoices
+    sales_invoices = await db.invoices.find(
+        {"user_id": current_user['user_id'], "invoice_type": "sales"},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    buyers = {}
+    for invoice in sales_invoices:
+        ext_data = invoice.get('extracted_data', {})
+        buyer_name = ext_data.get('bill_to_name') or ext_data.get('buyer_name')
+        if buyer_name:
+            buyer_name = buyer_name.strip()
+            if buyer_name not in buyers:
+                buyers[buyer_name] = {
+                    "name": buyer_name,
+                    "gst": ext_data.get('bill_to_gst') or ext_data.get('buyer_gst')
+                }
+    
+    # Get manual mappings
+    mappings = await db.bank_transaction_mappings.find(
+        {"user_id": current_user['user_id'], "statement_id": statement_id},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    mapping_dict = {m['transaction_index']: m['buyer_name'] for m in mappings}
+    
+    # Add mapping info to transactions
+    transactions = []
+    for idx, txn in enumerate(statement.get('transactions', [])):
+        txn_with_mapping = {
+            **txn,
+            "index": idx,
+            "mapped_buyer": mapping_dict.get(idx)
+        }
+        transactions.append(txn_with_mapping)
+    
+    return {
+        "statement_id": statement_id,
+        "filename": statement.get('filename'),
+        "transactions": transactions,
+        "buyers": list(buyers.values())
+    }
+
+@api_router.post("/bank-statement/map-transaction")
+async def map_transaction_to_buyer(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually map a bank transaction to a buyer"""
+    statement_id = data.get('statement_id')
+    transaction_index = data.get('transaction_index')
+    buyer_name = data.get('buyer_name')  # Can be None to unmap
+    
+    if statement_id is None or transaction_index is None:
+        raise HTTPException(status_code=400, detail="statement_id and transaction_index are required")
+    
+    # Verify statement belongs to user
+    statement = await db.bank_statements.find_one(
+        {"id": statement_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+    
+    if buyer_name:
+        # Create or update mapping
+        await db.bank_transaction_mappings.update_one(
+            {
+                "user_id": current_user['user_id'],
+                "statement_id": statement_id,
+                "transaction_index": transaction_index
+            },
+            {
+                "$set": {
+                    "user_id": current_user['user_id'],
+                    "statement_id": statement_id,
+                    "transaction_index": transaction_index,
+                    "buyer_name": buyer_name,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+        return {"message": f"Transaction mapped to {buyer_name}"}
+    else:
+        # Remove mapping
+        await db.bank_transaction_mappings.delete_one({
+            "user_id": current_user['user_id'],
+            "statement_id": statement_id,
+            "transaction_index": transaction_index
+        })
+        return {"message": "Transaction mapping removed"}
+
 @api_router.delete("/bank-statement/{statement_id}")
 async def delete_bank_statement(statement_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a bank statement"""
