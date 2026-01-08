@@ -1099,24 +1099,6 @@ IMPORTANT:
             os.remove(temp_file)
         except:
             pass
-            
-            file_content = FileContentWithMimeType(
-                file_path=temp_file,
-                mime_type="text/plain"
-            )
-            
-            user_message = UserMessage(
-                text=extraction_prompt,
-                file_contents=[file_content]
-            )
-            
-            response = await chat.send_message(user_message)
-            
-            # Clean up temp file
-            try:
-                os.remove(temp_file)
-            except:
-                pass
         
         # Check if response is valid
         if response is None:
