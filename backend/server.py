@@ -1025,13 +1025,6 @@ async def upload_bank_statement(
     if not llm_key:
         raise HTTPException(status_code=500, detail="LLM API key not configured")
     
-    # Try different models if one fails
-    models_to_try = [
-        ("openai", "gpt-4o"),
-        ("gemini", "gemini-2.5-flash"),
-        ("openai", "gpt-4o-mini")
-    ]
-    
     extraction_prompt = """Analyze this bank statement and extract all transactions. 
     
 For each transaction, extract:
