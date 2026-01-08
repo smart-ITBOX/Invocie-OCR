@@ -1077,59 +1077,28 @@ IMPORTANT:
 """
     
     try:
-        if filename.endswith(('.xlsx', '.xls')):
-            # For Excel files, save temporarily and use file path
-            temp_file = f"/tmp/{uuid.uuid4()}_{file.filename}"
-            with open(temp_file, "wb") as f:
-                f.write(content)
-            
-            mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if filename.endswith('.xlsx') else "application/vnd.ms-excel"
-            
-            file_content = FileContentWithMimeType(
-                file_path=temp_file,
-                mime_type=mime_type
-            )
-            
-            user_message = UserMessage(
-                text=extraction_prompt,
-                file_contents=[file_content]
-            )
-            
-            response = await chat.send_message(user_message)
-            
-            # Clean up temp file
-            try:
-                os.remove(temp_file)
-            except:
-                pass
-        elif filename.endswith('.pdf'):
-            # For PDF files, save temporarily and use file path
-            temp_file = f"/tmp/{uuid.uuid4()}_{file.filename}"
-            with open(temp_file, "wb") as f:
-                f.write(content)
-            
-            file_content = FileContentWithMimeType(
-                file_path=temp_file,
-                mime_type="application/pdf"
-            )
-            
-            user_message = UserMessage(
-                text=extraction_prompt,
-                file_contents=[file_content]
-            )
-            
-            response = await chat.send_message(user_message)
-            
-            # Clean up temp file
-            try:
-                os.remove(temp_file)
-            except:
-                pass
-        else:
-            # For CSV, save as text file temporarily
-            temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
-            with open(temp_file, "w") as f:
-                f.write(extracted_text)
+        # For all formats, we now have extracted_text, so send as text file
+        temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
+        with open(temp_file, "w") as f:
+            f.write(extracted_text)
+        
+        file_content = FileContentWithMimeType(
+            file_path=temp_file,
+            mime_type="text/plain"
+        )
+        
+        user_message = UserMessage(
+            text=extraction_prompt,
+            file_contents=[file_content]
+        )
+        
+        response = await chat.send_message(user_message)
+        
+        # Clean up temp file
+        try:
+            os.remove(temp_file)
+        except:
+            pass
             
             file_content = FileContentWithMimeType(
                 file_path=temp_file,
