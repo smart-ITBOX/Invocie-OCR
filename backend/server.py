@@ -1174,26 +1174,67 @@ IMPORTANT:
                 }
             }
             
-            # Try to find transactions array
-            trans_match = re.search(r'"transactions"\s*:\s*\[([\s\S]*?)\]', response_text)
-            if trans_match:
-                trans_text = trans_match.group(1)
-                # Try to parse individual transaction objects
-                trans_objects = re.findall(r'\{[^{}]*\}', trans_text)
-                for t_obj in trans_objects:
-                    try:
-                        t_obj_clean = re.sub(r',(\s*[}\]])', r'\1', t_obj)
-                        trans = json.loads(t_obj_clean)
-                        extracted_data["transactions"].append(trans)
-                    except:
-                        continue
+            # Try to find transactions array - handle multi-line
+            trans_start = response_text.find('"transactions"')
+            if trans_start != -1:
+                # Find the opening bracket
+                bracket_start = response_text.find('[', trans_start)
+                if bracket_start != -1:
+                    # Find matching closing bracket
+                    bracket_count = 1
+                    bracket_end = bracket_start + 1
+                    while bracket_count > 0 and bracket_end < len(response_text):
+                        if response_text[bracket_end] == '[':
+                            bracket_count += 1
+                        elif response_text[bracket_end] == ']':
+                            bracket_count -= 1
+                        bracket_end += 1
+                    
+                    trans_text = response_text[bracket_start+1:bracket_end-1]
+                    
+                    # Find all transaction objects using balanced brace matching
+                    i = 0
+                    while i < len(trans_text):
+                        if trans_text[i] == '{':
+                            brace_count = 1
+                            start = i
+                            i += 1
+                            while brace_count > 0 and i < len(trans_text):
+                                if trans_text[i] == '{':
+                                    brace_count += 1
+                                elif trans_text[i] == '}':
+                                    brace_count -= 1
+                                i += 1
+                            
+                            t_obj = trans_text[start:i]
+                            try:
+                                # Clean up the transaction object
+                                t_obj_clean = re.sub(r',(\s*[}\]])', r'\1', t_obj)
+                                t_obj_clean = re.sub(r'(\{|\,)\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*:', r'\1"\2":', t_obj_clean)
+                                trans = json.loads(t_obj_clean)
+                                extracted_data["transactions"].append(trans)
+                            except Exception as te:
+                                logging.debug(f"Failed to parse transaction: {te}")
+                                continue
+                        else:
+                            i += 1
             
             # Calculate totals from extracted transactions
             for t in extracted_data["transactions"]:
-                if t.get("credit"):
-                    extracted_data["summary"]["total_credits"] += float(t.get("credit", 0) or 0)
-                if t.get("debit"):
-                    extracted_data["summary"]["total_debits"] += float(t.get("debit", 0) or 0)
+                try:
+                    credit = t.get("credit")
+                    if credit and str(credit).replace('.','').replace('-','').isdigit():
+                        extracted_data["summary"]["total_credits"] += float(credit)
+                except:
+                    pass
+                try:
+                    debit = t.get("debit")
+                    if debit and str(debit).replace('.','').replace('-','').isdigit():
+                        extracted_data["summary"]["total_debits"] += float(debit)
+                except:
+                    pass
+            
+            logging.info(f"Manual extraction found {len(extracted_data['transactions'])} transactions")
         
     except Exception as e:
         logging.error(f"AI extraction failed: {str(e)}")
