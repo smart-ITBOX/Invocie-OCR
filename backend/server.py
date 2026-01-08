@@ -1594,6 +1594,314 @@ async def get_outstanding_report(current_user: dict = Depends(get_current_user))
         "unmatched_payments": unmatched_payments
     }
 
+@api_router.get("/bank-reconciliation/payables")
+async def get_payables_report(current_user: dict = Depends(get_current_user)):
+    """Generate payables report - how much we paid for purchase invoices"""
+    from fuzzywuzzy import fuzz
+    
+    # Get all purchase invoices for the user
+    purchase_invoices = await db.invoices.find(
+        {"user_id": current_user['user_id'], "invoice_type": "purchase"},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    # Get all bank statements and their transactions
+    bank_statements = await db.bank_statements.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    ).to_list(100)
+    
+    # Get all manual mappings for payables
+    manual_mappings = await db.bank_payable_mappings.find(
+        {"user_id": current_user['user_id']},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    # Create mapping lookup
+    mapping_lookup = {}
+    for m in manual_mappings:
+        stmt_id = m.get('statement_id')
+        txn_idx = m.get('transaction_index')
+        if stmt_id not in mapping_lookup:
+            mapping_lookup[stmt_id] = {}
+        mapping_lookup[stmt_id][txn_idx] = m.get('supplier_name')
+    
+    # Collect all debit transactions (payments made)
+    all_payments = []
+    for statement in bank_statements:
+        stmt_id = statement.get('id')
+        stmt_mappings = mapping_lookup.get(stmt_id, {})
+        
+        for idx, txn in enumerate(statement.get('transactions', [])):
+            if txn.get('debit') and float(txn['debit'] or 0) > 0:
+                txn_with_info = {
+                    **txn,
+                    "statement_id": stmt_id,
+                    "transaction_index": idx,
+                    "manual_mapping": stmt_mappings.get(idx)
+                }
+                all_payments.append(txn_with_info)
+    
+    # Group invoices by supplier
+    supplier_invoices = {}
+    for invoice in purchase_invoices:
+        ext_data = invoice.get('extracted_data', {})
+        supplier_name = ext_data.get('supplier_name') or ext_data.get('bill_from_name') or 'Unknown Supplier'
+        supplier_name = supplier_name.strip().upper()
+        
+        if supplier_name not in supplier_invoices:
+            supplier_invoices[supplier_name] = {
+                "supplier_name": supplier_name,
+                "supplier_gst": ext_data.get('supplier_gst') or ext_data.get('bill_from_gst'),
+                "total_purchases": 0,
+                "invoices": []
+            }
+        
+        amount = float(ext_data.get('total_amount') or 0)
+        supplier_invoices[supplier_name]['total_purchases'] += amount
+        supplier_invoices[supplier_name]['invoices'].append({
+            "invoice_id": invoice.get('id'),
+            "invoice_no": ext_data.get('invoice_no'),
+            "invoice_date": ext_data.get('invoice_date'),
+            "amount": amount
+        })
+    
+    # Helper function for fuzzy matching
+    def find_best_supplier_match(payment_text, supplier_names, threshold=60):
+        payment_text = payment_text.upper()
+        best_match = None
+        best_score = 0
+        
+        for supplier_name in supplier_names:
+            score1 = fuzz.partial_ratio(supplier_name, payment_text)
+            score2 = fuzz.token_set_ratio(supplier_name, payment_text)
+            
+            supplier_words = [w for w in supplier_name.split() if len(w) > 3]
+            word_matches = sum(1 for w in supplier_words if w in payment_text)
+            word_score = (word_matches / len(supplier_words) * 100) if supplier_words else 0
+            
+            score = max(score1, score2, word_score)
+            
+            if score > best_score and score >= threshold:
+                best_score = score
+                best_match = supplier_name
+        
+        return best_match, best_score
+    
+    # Match payments with suppliers
+    supplier_payments = {name: {"payments": [], "total_paid": 0} for name in supplier_invoices.keys()}
+    unmatched_payments = []
+    
+    supplier_names = list(supplier_invoices.keys())
+    
+    for payment in all_payments:
+        manual_supplier = payment.get('manual_mapping')
+        
+        if manual_supplier and manual_supplier.upper() in supplier_invoices:
+            matched_supplier = manual_supplier.upper()
+            payment_with_match = {**payment, "match_score": 100, "match_type": "manual"}
+            supplier_payments[matched_supplier]['payments'].append(payment_with_match)
+            supplier_payments[matched_supplier]['total_paid'] += float(payment.get('debit', 0) or 0)
+        else:
+            party_name = (payment.get('party_name') or '').strip()
+            description = (payment.get('description') or '').strip()
+            payment_text = f"{party_name} {description}"
+            
+            matched_supplier, match_score = find_best_supplier_match(payment_text, supplier_names)
+            
+            if matched_supplier:
+                payment_with_match = {**payment, "match_score": match_score, "match_type": "auto", "matched_text": payment_text[:100]}
+                supplier_payments[matched_supplier]['payments'].append(payment_with_match)
+                supplier_payments[matched_supplier]['total_paid'] += float(payment.get('debit', 0) or 0)
+            else:
+                unmatched_payments.append({**payment, "search_text": payment_text[:100]})
+    
+    # Build payables report
+    payables_report = []
+    for supplier_name, data in supplier_invoices.items():
+        total_paid = supplier_payments.get(supplier_name, {}).get('total_paid', 0)
+        payments = supplier_payments.get(supplier_name, {}).get('payments', [])
+        
+        payables_report.append({
+            "supplier_name": supplier_name,
+            "supplier_gst": data.get('supplier_gst'),
+            "total_purchases": round(data['total_purchases'], 2),
+            "total_paid": round(total_paid, 2),
+            "balance_due": round(data['total_purchases'] - total_paid, 2),
+            "invoice_count": len(data['invoices']),
+            "invoices": data['invoices'],
+            "payments": payments,
+            "payment_count": len(payments)
+        })
+    
+    payables_report.sort(key=lambda x: x['balance_due'], reverse=True)
+    
+    total_purchases = sum(r['total_purchases'] for r in payables_report)
+    total_paid = sum(r['total_paid'] for r in payables_report)
+    total_balance_due = sum(r['balance_due'] for r in payables_report)
+    
+    return {
+        "summary": {
+            "total_purchases": round(total_purchases, 2),
+            "total_paid": round(total_paid, 2),
+            "total_balance_due": round(total_balance_due, 2),
+            "supplier_count": len(payables_report),
+            "unmatched_payments_count": len(unmatched_payments),
+            "total_payments": len(all_payments)
+        },
+        "suppliers": payables_report,
+        "unmatched_payments": unmatched_payments
+    }
+
+@api_router.get("/bank-statement/{statement_id}/debit-transactions")
+async def get_debit_transactions(statement_id: str, current_user: dict = Depends(get_current_user)):
+    """Get debit transactions from a bank statement for supplier mapping"""
+    statement = await db.bank_statements.find_one(
+        {"id": statement_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+    
+    # Get all suppliers from purchase invoices
+    purchase_invoices = await db.invoices.find(
+        {"user_id": current_user['user_id'], "invoice_type": "purchase"},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    suppliers = {}
+    for invoice in purchase_invoices:
+        ext_data = invoice.get('extracted_data', {})
+        supplier_name = ext_data.get('supplier_name') or ext_data.get('bill_from_name')
+        if supplier_name:
+            supplier_name = supplier_name.strip()
+            if supplier_name not in suppliers:
+                suppliers[supplier_name] = {
+                    "name": supplier_name,
+                    "gst": ext_data.get('supplier_gst') or ext_data.get('bill_from_gst')
+                }
+    
+    # Get manual mappings for payables
+    mappings = await db.bank_payable_mappings.find(
+        {"user_id": current_user['user_id'], "statement_id": statement_id},
+        {"_id": 0}
+    ).to_list(10000)
+    
+    mapping_dict = {m['transaction_index']: m['supplier_name'] for m in mappings}
+    
+    # Add mapping info to transactions (only debit transactions)
+    transactions = []
+    for idx, txn in enumerate(statement.get('transactions', [])):
+        if txn.get('debit') and float(txn.get('debit') or 0) > 0:
+            txn_with_mapping = {
+                **txn,
+                "index": idx,
+                "mapped_supplier": mapping_dict.get(idx)
+            }
+            transactions.append(txn_with_mapping)
+    
+    return {
+        "statement_id": statement_id,
+        "filename": statement.get('filename'),
+        "transactions": transactions,
+        "suppliers": list(suppliers.values())
+    }
+
+@api_router.post("/bank-statement/map-payable")
+async def map_payable_transaction(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Manually map a debit transaction to a supplier"""
+    statement_id = data.get('statement_id')
+    transaction_index = data.get('transaction_index')
+    supplier_name = data.get('supplier_name')
+    
+    if statement_id is None or transaction_index is None:
+        raise HTTPException(status_code=400, detail="statement_id and transaction_index are required")
+    
+    statement = await db.bank_statements.find_one(
+        {"id": statement_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+    
+    if supplier_name:
+        await db.bank_payable_mappings.update_one(
+            {
+                "user_id": current_user['user_id'],
+                "statement_id": statement_id,
+                "transaction_index": transaction_index
+            },
+            {
+                "$set": {
+                    "user_id": current_user['user_id'],
+                    "statement_id": statement_id,
+                    "transaction_index": transaction_index,
+                    "supplier_name": supplier_name,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+        return {"message": f"Transaction mapped to {supplier_name}"}
+    else:
+        await db.bank_payable_mappings.delete_one({
+            "user_id": current_user['user_id'],
+            "statement_id": statement_id,
+            "transaction_index": transaction_index
+        })
+        return {"message": "Transaction mapping removed"}
+
+@api_router.post("/bank-statement/bulk-map")
+async def bulk_map_transactions(
+    data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """Bulk map multiple transactions to a buyer/supplier"""
+    statement_id = data.get('statement_id')
+    transaction_indices = data.get('transaction_indices', [])
+    party_name = data.get('party_name')
+    mapping_type = data.get('mapping_type', 'receivable')  # 'receivable' or 'payable'
+    
+    if not statement_id or not transaction_indices or not party_name:
+        raise HTTPException(status_code=400, detail="statement_id, transaction_indices, and party_name are required")
+    
+    statement = await db.bank_statements.find_one(
+        {"id": statement_id, "user_id": current_user['user_id']},
+        {"_id": 0}
+    )
+    
+    if not statement:
+        raise HTTPException(status_code=404, detail="Bank statement not found")
+    
+    collection = db.bank_transaction_mappings if mapping_type == 'receivable' else db.bank_payable_mappings
+    field_name = 'buyer_name' if mapping_type == 'receivable' else 'supplier_name'
+    
+    for idx in transaction_indices:
+        await collection.update_one(
+            {
+                "user_id": current_user['user_id'],
+                "statement_id": statement_id,
+                "transaction_index": idx
+            },
+            {
+                "$set": {
+                    "user_id": current_user['user_id'],
+                    "statement_id": statement_id,
+                    "transaction_index": idx,
+                    field_name: party_name,
+                    "updated_at": datetime.now(timezone.utc).isoformat()
+                }
+            },
+            upsert=True
+        )
+    
+    return {"message": f"Mapped {len(transaction_indices)} transactions to {party_name}"}
+
 # ============= User Profile Endpoints =============
 
 @api_router.get("/users/me")
