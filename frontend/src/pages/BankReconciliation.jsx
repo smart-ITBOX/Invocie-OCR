@@ -11,11 +11,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   ArrowLeft, Upload, FileSpreadsheet, CreditCard, AlertCircle, 
-  TrendingUp, TrendingDown, Users, Search, Eye, Trash2, 
-  CheckCircle, XCircle, HelpCircle, IndianRupee
+  TrendingUp, Users, Search, Eye, Trash2, 
+  CheckCircle, XCircle, HelpCircle, IndianRupee, Link, List
 } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -31,6 +31,12 @@ export default function BankReconciliation() {
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [activeTab, setActiveTab] = useState('outstanding');
+  
+  // For transactions view
+  const [selectedStatement, setSelectedStatement] = useState(null);
+  const [statementTransactions, setStatementTransactions] = useState(null);
+  const [transactionsDialogOpen, setTransactionsDialogOpen] = useState(false);
+  const [savingMapping, setSavingMapping] = useState(null);
 
   useEffect(() => {
     loadData();
@@ -103,6 +109,57 @@ export default function BankReconciliation() {
       loadData();
     } catch (error) {
       toast.error('Failed to delete statement');
+    }
+  };
+
+  const openTransactionsDialog = async (statement) => {
+    setSelectedStatement(statement);
+    setTransactionsDialogOpen(true);
+    
+    try {
+      const token = localStorage.getItem('token');
+      const response = await axios.get(`${API}/bank-statement/${statement.id}/transactions`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setStatementTransactions(response.data);
+    } catch (error) {
+      toast.error('Failed to load transactions');
+    }
+  };
+
+  const handleMapTransaction = async (transactionIndex, buyerName) => {
+    if (!selectedStatement) return;
+    
+    setSavingMapping(transactionIndex);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(`${API}/bank-statement/map-transaction`, {
+        statement_id: selectedStatement.id,
+        transaction_index: transactionIndex,
+        buyer_name: buyerName || null
+      }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      // Update local state
+      setStatementTransactions(prev => ({
+        ...prev,
+        transactions: prev.transactions.map((t, idx) => 
+          idx === transactionIndex ? { ...t, mapped_buyer: buyerName || null } : t
+        )
+      }));
+      
+      toast.success(buyerName ? `Mapped to ${buyerName}` : 'Mapping removed');
+      
+      // Refresh outstanding report
+      const reportRes = await axios.get(`${API}/bank-reconciliation/outstanding`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      setOutstandingReport(reportRes.data);
+    } catch (error) {
+      toast.error('Failed to save mapping');
+    } finally {
+      setSavingMapping(null);
     }
   };
 
@@ -247,14 +304,18 @@ export default function BankReconciliation() {
 
         {/* Tabs */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsList className="grid w-full grid-cols-3 max-w-lg">
             <TabsTrigger value="outstanding" className="flex items-center gap-2">
               <AlertCircle size={16} />
-              Outstanding Report
+              Outstanding
+            </TabsTrigger>
+            <TabsTrigger value="transactions" className="flex items-center gap-2">
+              <List size={16} />
+              Transactions
             </TabsTrigger>
             <TabsTrigger value="statements" className="flex items-center gap-2">
               <FileSpreadsheet size={16} />
-              Bank Statements
+              Statements
             </TabsTrigger>
           </TabsList>
 
@@ -361,10 +422,66 @@ export default function BankReconciliation() {
                 <AlertCircle className="h-4 w-4 text-[#F59E0B]" />
                 <AlertTitle className="text-[#F59E0B]">Unmatched Payments</AlertTitle>
                 <AlertDescription>
-                  {outstandingReport.unmatched_payments.length} payment(s) could not be matched with any buyer. 
-                  These may be from new customers or have different naming in the bank statement.
+                  {outstandingReport.unmatched_payments.length} payment(s) could not be matched automatically. 
+                  Go to the <strong>Transactions</strong> tab to manually map them to buyers.
                 </AlertDescription>
               </Alert>
+            )}
+          </TabsContent>
+
+          {/* Transactions Tab - NEW */}
+          <TabsContent value="transactions" className="space-y-4 mt-6">
+            {statements.length === 0 ? (
+              <Alert>
+                <FileSpreadsheet className="h-4 w-4" />
+                <AlertTitle>No Bank Statements</AlertTitle>
+                <AlertDescription>
+                  Upload a bank statement to view and map transactions.
+                </AlertDescription>
+              </Alert>
+            ) : (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  Select a bank statement to view transactions and manually map them to buyers.
+                </p>
+                
+                {statements.map((statement) => (
+                  <Card key={statement.id} className="border-[#0B2B5C]/10">
+                    <CardContent className="pt-4">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className="w-10 h-10 bg-[#0B2B5C]/10 rounded-lg flex items-center justify-center">
+                            <FileSpreadsheet className="text-[#0B2B5C]" size={20} />
+                          </div>
+                          <div>
+                            <div className="font-medium">{statement.filename}</div>
+                            <div className="text-sm text-muted-foreground">
+                              Uploaded: {formatDate(statement.upload_date)}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-right">
+                            <div className="text-sm text-muted-foreground">Credits</div>
+                            <div className="font-mono text-[#10B981] font-medium">
+                              {formatAmount(statement.total_credits)}
+                            </div>
+                          </div>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            onClick={() => openTransactionsDialog(statement)}
+                            className="bg-[#0B2B5C]"
+                          >
+                            <Link size={14} className="mr-1" />
+                            View & Map
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
             )}
           </TabsContent>
 
@@ -501,6 +618,7 @@ export default function BankReconciliation() {
                           <TableRow className="bg-muted/50">
                             <TableHead>Date</TableHead>
                             <TableHead>Description</TableHead>
+                            <TableHead>Match</TableHead>
                             <TableHead className="text-right">Amount</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -510,6 +628,11 @@ export default function BankReconciliation() {
                               <TableCell>{formatDate(pmt.date)}</TableCell>
                               <TableCell className="text-sm max-w-[200px] truncate">
                                 {pmt.description}
+                              </TableCell>
+                              <TableCell>
+                                <Badge variant="outline" className={pmt.match_type === 'manual' ? 'text-blue-600 border-blue-600' : 'text-gray-600'}>
+                                  {pmt.match_type === 'manual' ? 'Manual' : `Auto ${pmt.match_score}%`}
+                                </Badge>
                               </TableCell>
                               <TableCell className="text-right font-mono text-[#10B981]">
                                 {formatAmount(pmt.credit)}
@@ -524,6 +647,87 @@ export default function BankReconciliation() {
                   )}
                 </div>
               </div>
+            )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Transactions Mapping Dialog - NEW */}
+        <Dialog open={transactionsDialogOpen} onOpenChange={setTransactionsDialogOpen}>
+          <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="text-[#0B2B5C] font-manrope">
+                <FileSpreadsheet className="inline-block mr-2" size={20} />
+                {selectedStatement?.filename}
+              </DialogTitle>
+              <DialogDescription>
+                Map bank transactions to buyers. Only credit (incoming) transactions are shown.
+              </DialogDescription>
+            </DialogHeader>
+            
+            {statementTransactions ? (
+              <div className="space-y-4">
+                <div className="border rounded-md">
+                  <Table>
+                    <TableHeader>
+                      <TableRow className="bg-[#0B2B5C]/5">
+                        <TableHead className="font-semibold w-24">Date</TableHead>
+                        <TableHead className="font-semibold">Description</TableHead>
+                        <TableHead className="font-semibold text-right w-28">Credit</TableHead>
+                        <TableHead className="font-semibold w-48">Map to Buyer</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {statementTransactions.transactions
+                        .filter(t => t.credit && parseFloat(t.credit) > 0)
+                        .map((txn, idx) => (
+                        <TableRow key={txn.index}>
+                          <TableCell className="text-sm">{formatDate(txn.date)}</TableCell>
+                          <TableCell>
+                            <div className="text-sm">{txn.description}</div>
+                            {txn.party_name && (
+                              <div className="text-xs text-muted-foreground">Party: {txn.party_name}</div>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right font-mono text-[#10B981] font-medium">
+                            {formatAmount(txn.credit)}
+                          </TableCell>
+                          <TableCell>
+                            <Select
+                              value={txn.mapped_buyer || ""}
+                              onValueChange={(value) => handleMapTransaction(txn.index, value)}
+                              disabled={savingMapping === txn.index}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue placeholder="Select buyer..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="">-- Not Mapped --</SelectItem>
+                                {statementTransactions.buyers.map((buyer) => (
+                                  <SelectItem key={buyer.name} value={buyer.name}>
+                                    {buyer.name} {buyer.gst && `(${buyer.gst.slice(0,10)}...)`}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                
+                {statementTransactions.transactions.filter(t => t.credit && parseFloat(t.credit) > 0).length === 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>No Credit Transactions</AlertTitle>
+                    <AlertDescription>
+                      No incoming payment transactions found in this statement.
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-8">Loading transactions...</div>
             )}
           </DialogContent>
         </Dialog>
