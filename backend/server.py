@@ -1071,16 +1071,40 @@ IMPORTANT:
             
             mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" if filename.endswith('.xlsx') else "application/vnd.ms-excel"
             
-            response = await asyncio.to_thread(
-                chat.send_message,
-                [
-                    UserMessage(
-                        content=extraction_prompt,
-                        file_path=temp_file,
-                        mime_type=mime_type
-                    )
-                ]
+            file_content = FileContentWithMimeType(
+                file_path=temp_file,
+                mime_type=mime_type
             )
+            
+            user_message = UserMessage(
+                text=extraction_prompt,
+                file_contents=[file_content]
+            )
+            
+            response = await chat.send_message(user_message)
+            
+            # Clean up temp file
+            try:
+                os.remove(temp_file)
+            except:
+                pass
+        elif filename.endswith('.pdf'):
+            # For PDF files, save temporarily and use file path
+            temp_file = f"/tmp/{uuid.uuid4()}_{file.filename}"
+            with open(temp_file, "wb") as f:
+                f.write(content)
+            
+            file_content = FileContentWithMimeType(
+                file_path=temp_file,
+                mime_type="application/pdf"
+            )
+            
+            user_message = UserMessage(
+                text=extraction_prompt,
+                file_contents=[file_content]
+            )
+            
+            response = await chat.send_message(user_message)
             
             # Clean up temp file
             try:
@@ -1088,14 +1112,14 @@ IMPORTANT:
             except:
                 pass
         else:
-            # Send text content for PDF/CSV
-            response = await asyncio.to_thread(
-                chat.send_message,
-                [UserMessage(content=f"{extraction_prompt}\n\nBank Statement Content:\n{extracted_text[:15000]}")]
+            # Send text content for CSV
+            user_message = UserMessage(
+                text=f"{extraction_prompt}\n\nBank Statement Content:\n{extracted_text[:15000]}"
             )
+            response = await chat.send_message(user_message)
         
         # Parse AI response
-        response_text = response.content.strip()
+        response_text = response.strip()
         if response_text.startswith("```json"):
             response_text = response_text[7:]
         if response_text.startswith("```"):
@@ -1104,6 +1128,11 @@ IMPORTANT:
             response_text = response_text[:-3]
         
         import json
+        import re
+        json_match = re.search(r'\{[\s\S]*\}', response_text)
+        if json_match:
+            response_text = json_match.group(0)
+        
         extracted_data = json.loads(response_text.strip())
         
     except Exception as e:
