@@ -1018,18 +1018,19 @@ async def upload_bank_statement(
     else:
         raise HTTPException(status_code=400, detail="Unsupported file format")
     
-    # Use AI to extract transactions
+    # Use AI to extract transactions with retry logic
     llm_key = os.environ.get("EMERGENT_LLM_KEY")
     if not llm_key:
         llm_key = os.environ.get("EMERGENT_API_KEY")
     if not llm_key:
         raise HTTPException(status_code=500, detail="LLM API key not configured")
     
-    chat = LlmChat(
-        api_key=llm_key,
-        session_id=str(uuid.uuid4()),
-        system_message="You are an expert bank statement data extraction assistant. Extract transaction data accurately from any bank statement format."
-    ).with_model("gemini", "gemini-2.5-flash")
+    # Try different models if one fails
+    models_to_try = [
+        ("openai", "gpt-4o"),
+        ("gemini", "gemini-2.5-flash"),
+        ("openai", "gpt-4o-mini")
+    ]
     
     extraction_prompt = """Analyze this bank statement and extract all transactions. 
     
