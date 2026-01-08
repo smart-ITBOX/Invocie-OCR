@@ -1077,10 +1077,12 @@ IMPORTANT:
 - Try to identify party names from NEFT/IMPS/UPI descriptions
 """
     
-    # For all formats, we now have extracted_text, so send as text file
-    temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
-    with open(temp_file, "w") as f:
-        f.write(extracted_text)
+    # Try different models if one fails
+    models_to_try = [
+        ("gemini", "gemini-2.5-flash"),
+        ("gemini", "gemini-2.0-flash"),
+        ("openai", "gpt-4o-mini"),
+    ]
     
     last_error = None
     response = None
@@ -1093,17 +1095,34 @@ IMPORTANT:
                 system_message="You are an expert bank statement data extraction assistant. Extract transaction data accurately from any bank statement format."
             ).with_model(provider, model)
             
-            file_content = FileContentWithMimeType(
-                file_path=temp_file,
-                mime_type="text/plain"
-            )
-            
-            user_message = UserMessage(
-                text=extraction_prompt,
-                file_contents=[file_content]
-            )
-            
-            response = await chat.send_message(user_message)
+            if provider == "gemini":
+                # Gemini supports file attachments
+                temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
+                with open(temp_file, "w") as f:
+                    f.write(extracted_text)
+                
+                file_content = FileContentWithMimeType(
+                    file_path=temp_file,
+                    mime_type="text/plain"
+                )
+                
+                user_message = UserMessage(
+                    text=extraction_prompt,
+                    file_contents=[file_content]
+                )
+                
+                response = await chat.send_message(user_message)
+                
+                # Clean up temp file
+                try:
+                    os.remove(temp_file)
+                except:
+                    pass
+            else:
+                # OpenAI - send text directly in the prompt
+                full_prompt = f"{extraction_prompt}\n\nBank Statement Data:\n{extracted_text[:30000]}"
+                user_message = UserMessage(text=full_prompt)
+                response = await chat.send_message(user_message)
             
             if response:
                 logging.info(f"Successfully used {provider}/{model} for bank statement extraction")
@@ -1112,12 +1131,6 @@ IMPORTANT:
             last_error = str(e)
             logging.warning(f"Failed with {provider}/{model}: {str(e)}, trying next model...")
             continue
-    
-    # Clean up temp file
-    try:
-        os.remove(temp_file)
-    except:
-        pass
     
     if response is None:
         raise HTTPException(status_code=500, detail=f"All AI models failed. Last error: {last_error}")
