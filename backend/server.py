@@ -520,6 +520,24 @@ async def login(credentials: UserLogin):
         "token": token
     }
 
+@api_router.post("/auth/forgot-password")
+async def forgot_password(request: ForgotPasswordRequest):
+    """
+    Send password reset link to user's email.
+    NOTE: In production, this would send an actual email with a reset link.
+    For now, it just confirms the email exists.
+    """
+    user = await db.users.find_one({"email": request.email})
+    if not user:
+        # Don't reveal if email exists or not for security
+        return {"message": "If this email is registered, you will receive a password reset link."}
+    
+    # In production, generate reset token and send email
+    # For now, just acknowledge the request
+    logging.info(f"Password reset requested for: {request.email}")
+    
+    return {"message": "If this email is registered, you will receive a password reset link."}
+
 @api_router.get("/settings/company")
 async def get_company_settings(current_user: dict = Depends(get_current_user)):
     settings = await db.company_settings.find_one(
