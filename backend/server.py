@@ -162,6 +162,20 @@ class AdminUserUpdate(BaseModel):
     is_active: Optional[bool] = None  # Enable/disable user access
     subscription_valid_until: Optional[str] = None  # ISO date string
 
+class AdminPasswordReset(BaseModel):
+    new_password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ManualInvoiceCreate(BaseModel):
+    invoice_type: str
+    original_filename: str
+    extracted_data: dict
+    confidence_scores: dict = {}
+    status: str = "verified"
+    is_manual_entry: bool = True
+
 class UserResponse(BaseModel):
     id: str
     email: str
