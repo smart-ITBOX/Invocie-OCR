@@ -11,6 +11,7 @@ import Profile from '@/pages/Profile';
 import AdminDashboard from '@/pages/AdminDashboard';
 import AdminReports from '@/pages/AdminReports';
 import BankReconciliation from '@/pages/BankReconciliation';
+import ManualEntry from '@/pages/ManualEntry';
 import ProtectedRoute from '@/components/ProtectedRoute';
 import '@/App.css';
 
@@ -27,6 +28,7 @@ function App() {
           <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/bank-reconciliation" element={<ProtectedRoute><BankReconciliation /></ProtectedRoute>} />
+          <Route path="/manual-entry" element={<ProtectedRoute><ManualEntry /></ProtectedRoute>} />
           <Route path="/admin" element={<ProtectedRoute><AdminDashboard /></ProtectedRoute>} />
           <Route path="/admin/reports" element={<ProtectedRoute><AdminReports /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" replace />} />
