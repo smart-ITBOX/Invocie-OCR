@@ -136,6 +136,13 @@ OPENAI_API_KEY=your-openai-api-key    # Alternative
 4. **Manual Invoice Entry** - Full page with sales and purchase invoice forms, auto-calculation
 5. **Enhanced Menu Bar** - Gradient styling, rounded tabs, better visual hierarchy
 6. **Menu Reordering** - Settings tab moved to last position, Manual Entry added
+7. **Removed Emergent Dependencies** - Replaced `emergentintegrations` with standard OpenAI and Google SDKs
+
+### Standalone Deployment
+The codebase is now **fully standalone** and can be deployed on any platform:
+- No Emergent-specific dependencies
+- Uses standard `openai` and `google-generativeai` Python packages
+- Set `GOOGLE_API_KEY` or `OPENAI_API_KEY` in environment
 
 ### Files Modified
 - `/app/frontend/src/pages/Login.jsx` - Password toggle, forgot password dialog
@@ -143,7 +150,9 @@ OPENAI_API_KEY=your-openai-api-key    # Alternative
 - `/app/frontend/src/components/Layout.jsx` - Enhanced menu styling, reordering
 - `/app/frontend/src/pages/ManualEntry.jsx` - Sales/Purchase entry forms
 - `/app/frontend/src/App.js` - Added manual-entry route
-- `/app/backend/server.py` - New endpoints for forgot-password, reset-password, manual invoice
+- `/app/backend/server.py` - Removed emergentintegrations, using direct OpenAI/Gemini SDKs
+- `/app/backend/requirements.txt` - Removed emergentintegrations dependency
+- `/app/backend/.env` - Updated to use GOOGLE_API_KEY/OPENAI_API_KEY
 
 ---
 
