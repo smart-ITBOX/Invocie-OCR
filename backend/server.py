@@ -1170,15 +1170,15 @@ async def upload_bank_statement(
     else:
         raise HTTPException(status_code=400, detail="Unsupported file format")
     
-    # Use AI to extract transactions with retry logic
-    llm_key = os.environ.get("EMERGENT_LLM_KEY")
-    if not llm_key:
-        llm_key = os.environ.get("EMERGENT_API_KEY")
-    if not llm_key:
-        raise HTTPException(status_code=500, detail="LLM API key not configured")
+    # Use AI to extract transactions - Standalone version using OpenAI/Gemini SDKs
+    google_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
+    openai_key = os.environ.get('OPENAI_API_KEY')
+    
+    if not google_key and not openai_key:
+        raise HTTPException(status_code=500, detail="No LLM API key configured. Set GOOGLE_API_KEY or OPENAI_API_KEY")
     
     extraction_prompt = """Analyze this bank statement and extract all transactions. 
-    
+
 For each transaction, extract:
 - date: Transaction date (format as YYYY-MM-DD if possible)
 - description: Full description/narration
@@ -1222,67 +1222,49 @@ IMPORTANT:
 - Try to identify party names from NEFT/IMPS/UPI descriptions
 """
     
-    # Try different models if one fails
-    models_to_try = [
-        ("gemini", "gemini-2.5-flash"),
-        ("gemini", "gemini-2.0-flash"),
-        ("openai", "gpt-4o-mini"),
-    ]
-    
     last_error = None
-    response = None
+    response_text = None
     
-    for provider, model in models_to_try:
+    # Try Gemini first (cheaper)
+    if google_key and GEMINI_AVAILABLE:
         try:
-            chat = LlmChat(
-                api_key=llm_key,
-                session_id=str(uuid.uuid4()),
-                system_message="You are an expert bank statement data extraction assistant. Extract transaction data accurately from any bank statement format."
-            ).with_model(provider, model)
+            genai.configure(api_key=google_key)
+            model = genai.GenerativeModel("gemini-1.5-flash")
             
-            if provider == "gemini":
-                # Gemini supports file attachments
-                temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
-                with open(temp_file, "w") as f:
-                    f.write(extracted_text)
-                
-                file_content = FileContentWithMimeType(
-                    file_path=temp_file,
-                    mime_type="text/plain"
-                )
-                
-                user_message = UserMessage(
-                    text=extraction_prompt,
-                    file_contents=[file_content]
-                )
-                
-                response = await chat.send_message(user_message)
-                
-                # Clean up temp file
-                try:
-                    os.remove(temp_file)
-                except:
-                    pass
-            else:
-                # OpenAI - send text directly in the prompt
-                full_prompt = f"{extraction_prompt}\n\nBank Statement Data:\n{extracted_text[:30000]}"
-                user_message = UserMessage(text=full_prompt)
-                response = await chat.send_message(user_message)
-            
-            if response:
-                logging.info(f"Successfully used {provider}/{model} for bank statement extraction")
-                break
+            full_prompt = f"{extraction_prompt}\n\nBank Statement Data:\n{extracted_text[:50000]}"
+            response = model.generate_content(full_prompt)
+            response_text = response.text
+            logging.info("Bank statement extraction successful with Gemini")
         except Exception as e:
             last_error = str(e)
-            logging.warning(f"Failed with {provider}/{model}: {str(e)}, trying next model...")
-            continue
+            logging.warning(f"Gemini extraction failed: {str(e)}, trying OpenAI...")
     
-    if response is None:
+    # Fallback to OpenAI
+    if response_text is None and openai_key and OPENAI_AVAILABLE:
+        try:
+            client = AsyncOpenAI(api_key=openai_key)
+            
+            full_prompt = f"{extraction_prompt}\n\nBank Statement Data:\n{extracted_text[:30000]}"
+            response = await client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are an expert bank statement data extraction assistant. Return only valid JSON."},
+                    {"role": "user", "content": full_prompt}
+                ],
+                temperature=0.1
+            )
+            response_text = response.choices[0].message.content
+            logging.info("Bank statement extraction successful with OpenAI")
+        except Exception as e:
+            last_error = str(e)
+            logging.error(f"OpenAI extraction failed: {str(e)}")
+    
+    if response_text is None:
         raise HTTPException(status_code=500, detail=f"All AI models failed. Last error: {last_error}")
     
     try:
         # Parse AI response
-        response_text = response.strip() if isinstance(response, str) else str(response)
+        response_text = response_text.strip() if isinstance(response_text, str) else str(response_text)
         
         # Remove markdown code blocks
         if "```json" in response_text:
@@ -1291,10 +1273,6 @@ IMPORTANT:
             parts = response_text.split("```")
             if len(parts) >= 2:
                 response_text = parts[1]
-        
-        # Try to find JSON object in the response
-        import json
-        import re
         
         # Clean up common JSON issues
         response_text = response_text.strip()
