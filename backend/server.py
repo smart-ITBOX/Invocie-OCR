@@ -20,18 +20,27 @@ import pandas as pd
 import json
 import re
 
-# LLM imports - using standard SDKs (OpenAI and Google)
+# LLM imports - Support both Emergent and standard SDKs
+EMERGENT_AVAILABLE = False
+try:
+    from emergentintegrations.llm.chat import LlmChat, UserMessage, FileContentWithMimeType
+    EMERGENT_AVAILABLE = True
+except ImportError:
+    pass
+
+OPENAI_AVAILABLE = False
 try:
     from openai import AsyncOpenAI
     OPENAI_AVAILABLE = True
 except ImportError:
-    OPENAI_AVAILABLE = False
+    pass
     
+GEMINI_AVAILABLE = False
 try:
     import google.generativeai as genai
     GEMINI_AVAILABLE = True
 except ImportError:
-    GEMINI_AVAILABLE = False
+    pass
 
 ROOT_DIR = Path(__file__).parent
 load_dotenv(ROOT_DIR / '.env')
