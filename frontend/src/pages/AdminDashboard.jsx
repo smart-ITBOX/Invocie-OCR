@@ -8,9 +8,11 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
 import { Separator } from '@/components/ui/separator';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { ArrowLeft, Users, Building2, Shield, Eye, UserCheck, UserX, Phone, MapPin } from 'lucide-react';
+import { ArrowLeft, Users, Building2, Shield, Eye, UserCheck, UserX, Phone, MapPin, KeyRound, EyeOff } from 'lucide-react';
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -22,6 +24,11 @@ export default function AdminDashboard() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [updatingUser, setUpdatingUser] = useState(null);
+  const [resetPasswordOpen, setResetPasswordOpen] = useState(false);
+  const [resetPasswordUser, setResetPasswordUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   useEffect(() => {
     loadData();
@@ -68,6 +75,37 @@ export default function AdminDashboard() {
   const openViewDialog = (user) => {
     setSelectedUser(user);
     setViewDialogOpen(true);
+  };
+
+  const openResetPasswordDialog = (user) => {
+    setResetPasswordUser(user);
+    setNewPassword('');
+    setShowNewPassword(false);
+    setResetPasswordOpen(true);
+  };
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault();
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    setResettingPassword(true);
+    try {
+      const token = localStorage.getItem('token');
+      await axios.post(
+        `${API}/admin/users/${resetPasswordUser.id}/reset-password`,
+        { new_password: newPassword },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      toast.success(`Password reset successfully for ${resetPasswordUser.name}`);
+      setResetPasswordOpen(false);
+      setNewPassword('');
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Failed to reset password');
+    } finally {
+      setResettingPassword(false);
+    }
   };
 
   const formatDate = (dateStr) => {
@@ -234,15 +272,28 @@ export default function AdminDashboard() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => openViewDialog(user)}
-                          data-testid={`view-user-${user.id}`}
-                        >
-                          <Eye size={14} className="mr-1" />
-                          View Details
-                        </Button>
+                        <div className="flex justify-end gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openResetPasswordDialog(user)}
+                            data-testid={`reset-password-${user.id}`}
+                            disabled={user.role === 'admin'}
+                            className="text-orange-600 border-orange-200 hover:bg-orange-50"
+                          >
+                            <KeyRound size={14} className="mr-1" />
+                            Reset Password
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openViewDialog(user)}
+                            data-testid={`view-user-${user.id}`}
+                          >
+                            <Eye size={14} className="mr-1" />
+                            View
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -351,6 +402,65 @@ export default function AdminDashboard() {
                 </div>
               </div>
             )}
+          </DialogContent>
+        </Dialog>
+
+        {/* Reset Password Dialog */}
+        <Dialog open={resetPasswordOpen} onOpenChange={setResetPasswordOpen}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-[#0B2B5C] font-manrope flex items-center gap-2">
+                <KeyRound className="text-orange-500" size={20} />
+                Reset User Password
+              </DialogTitle>
+              <DialogDescription>
+                Set a new password for <strong>{resetPasswordUser?.name}</strong> ({resetPasswordUser?.email})
+              </DialogDescription>
+            </DialogHeader>
+            
+            <form onSubmit={handleResetPassword} className="space-y-4 pt-4">
+              <div className="space-y-2">
+                <Label htmlFor="new-password">New Password</Label>
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Enter new password (min 6 characters)"
+                    data-testid="admin-new-password-input"
+                    required
+                    minLength={6}
+                    className="pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                    data-testid="toggle-new-password"
+                  >
+                    {showNewPassword ? <EyeOff size={18} /> : <Eye size={18} />}
+                  </button>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  The user will need to use this password for their next login.
+                </p>
+              </div>
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <Button type="button" variant="outline" onClick={() => setResetPasswordOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  className="bg-orange-500 hover:bg-orange-600"
+                  disabled={resettingPassword}
+                  data-testid="confirm-reset-password-btn"
+                >
+                  {resettingPassword ? 'Resetting...' : 'Reset Password'}
+                </Button>
+              </div>
+            </form>
           </DialogContent>
         </Dialog>
       </div>
