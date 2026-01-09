@@ -2105,6 +2105,38 @@ async def update_user(
     
     return {"message": "User updated successfully"}
 
+@api_router.post("/admin/users/{user_id}/reset-password")
+async def admin_reset_user_password(
+    user_id: str,
+    password_data: AdminPasswordReset,
+    current_user: dict = Depends(get_current_user)
+):
+    """Reset a user's password (admin only)"""
+    await check_admin(current_user)
+    
+    user_doc = await db.users.find_one({"id": user_id}, {"_id": 0})
+    if not user_doc:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Cannot reset admin password via this endpoint
+    if user_doc.get('role') == 'admin':
+        raise HTTPException(status_code=400, detail="Cannot reset admin password via this endpoint")
+    
+    if len(password_data.new_password) < 6:
+        raise HTTPException(status_code=400, detail="Password must be at least 6 characters")
+    
+    # Hash the new password
+    new_password_hash = bcrypt.hashpw(password_data.new_password.encode(), bcrypt.gensalt()).decode()
+    
+    await db.users.update_one(
+        {"id": user_id},
+        {"$set": {"password_hash": new_password_hash}}
+    )
+    
+    logging.info(f"Admin {current_user['user_id']} reset password for user {user_id}")
+    
+    return {"message": "Password reset successfully"}
+
 @api_router.delete("/admin/users/{user_id}")
 async def delete_user(user_id: str, current_user: dict = Depends(get_current_user)):
     """Delete a user (admin only)"""
