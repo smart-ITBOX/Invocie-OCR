@@ -722,6 +722,76 @@ async def batch_upload_invoices(
         "errors": errors
     }
 
+@api_router.post("/invoices/manual")
+async def create_manual_invoice(
+    invoice_data: ManualInvoiceCreate,
+    current_user: dict = Depends(get_current_user)
+):
+    """Create a manual invoice entry for handwritten or unreadable invoices"""
+    
+    # Check for duplicate invoice number
+    invoice_no = invoice_data.extracted_data.get('invoice_no')
+    if invoice_no:
+        is_duplicate, duplicate_ids = await check_duplicate_invoice(
+            current_user['user_id'],
+            invoice_no
+        )
+        if is_duplicate:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Duplicate Invoice Number: Invoice #{invoice_no} already exists in the system (ID: {duplicate_ids[0]}). Please check existing invoices."
+            )
+    
+    # Extract date info for month/FY
+    invoice_date = invoice_data.extracted_data.get('invoice_date', '')
+    month, fy = get_month_and_fy(invoice_date)
+    
+    # Create extracted data object
+    extracted_data = InvoiceData(
+        invoice_no=invoice_data.extracted_data.get('invoice_no', ''),
+        invoice_date=invoice_data.extracted_data.get('invoice_date', ''),
+        bill_to_name=invoice_data.extracted_data.get('bill_to_name', ''),
+        bill_to_gst=invoice_data.extracted_data.get('bill_to_gst', ''),
+        bill_to_address=invoice_data.extracted_data.get('bill_to_address', ''),
+        supplier_name=invoice_data.extracted_data.get('supplier_name', ''),
+        supplier_gst=invoice_data.extracted_data.get('supplier_gst', ''),
+        supplier_address=invoice_data.extracted_data.get('supplier_address', ''),
+        basic_amount=invoice_data.extracted_data.get('basic_amount', 0),
+        gst=invoice_data.extracted_data.get('gst', 0),
+        total_amount=invoice_data.extracted_data.get('total_amount', 0)
+    )
+    
+    # Validation flags for manual entry (assume clean)
+    validation_flags = ValidationFlags(
+        is_duplicate=False,
+        gst_mismatch=False,
+        duplicate_invoice_ids=[]
+    )
+    
+    # Create invoice object
+    invoice = Invoice(
+        user_id=current_user['user_id'],
+        invoice_type=invoice_data.invoice_type,
+        filename=invoice_data.original_filename,
+        file_data="",  # No file for manual entry
+        file_type="manual",
+        extracted_data=extracted_data,
+        confidence_scores={},
+        validation_flags=validation_flags,
+        status="verified",  # Manual entries are pre-verified
+        month=month,
+        financial_year=fy
+    )
+    
+    invoice_dict = invoice.model_dump()
+    invoice_dict['created_at'] = invoice_dict['created_at'].isoformat()
+    invoice_dict['updated_at'] = invoice_dict['updated_at'].isoformat()
+    invoice_dict['is_manual_entry'] = True
+    
+    await db.invoices.insert_one(invoice_dict)
+    
+    return invoice.model_dump()
+
 @api_router.get("/invoices")
 async def get_invoices(
     invoice_type: Optional[str] = None,
