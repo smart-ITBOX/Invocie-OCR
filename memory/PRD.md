@@ -65,9 +65,20 @@ Build a mobile-responsive invoice processing application for CA firms that allow
 - **Frontend**: React, TailwindCSS, Shadcn/UI, Recharts
 - **Backend**: FastAPI, Pydantic, Motor (MongoDB async)
 - **Database**: MongoDB
-- **AI**: OpenAI GPT-4o, Gemini 2.5 Flash via Emergent LLM Key
+- **AI**: OpenAI GPT-4o, Google Gemini 1.5 Flash (using standard SDKs - NO Emergent dependencies)
 - **File Processing**: pypdf, pandas, openpyxl, xlrd
 - **Matching**: thefuzz for fuzzy string matching
+
+### Environment Variables
+```env
+# Required
+MONGO_URL=mongodb://localhost:27017
+DB_NAME=test_database
+
+# LLM API Keys - Set at least one
+GOOGLE_API_KEY=your-google-api-key    # Recommended (cheaper)
+OPENAI_API_KEY=your-openai-api-key    # Alternative
+```
 
 ### API Endpoints
 
