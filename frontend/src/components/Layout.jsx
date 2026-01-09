@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { Home, FileText, LogOut, Settings as SettingsIcon, User, Shield, BarChart3, CreditCard } from 'lucide-react';
+import { Home, FileText, LogOut, Settings as SettingsIcon, User, Shield, BarChart3, CreditCard, PlusCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
@@ -59,15 +59,15 @@ export default function Layout({ children }) {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC]">
-      {/* Top Navigation */}
-      <nav className="bg-gradient-to-r from-[#0B2B5C] to-[#164E8C] text-white shadow-xl border-b-2 border-[#FFD700]" data-testid="main-navigation">
+      {/* Top Navigation - Enhanced Design */}
+      <nav className="bg-gradient-to-r from-[#0B2B5C] via-[#164E8C] to-[#0B2B5C] text-white shadow-2xl border-b-4 border-[#FFD700]" data-testid="main-navigation">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-20">
             <div className="flex items-center gap-8">
               {/* Company Logo and Name */}
               <div className="flex items-center gap-3" data-testid="app-logo">
                 {!isAdmin && companySettings?.company_logo ? (
-                  <div className="w-16 h-16 rounded-md p-2 flex items-center justify-center shadow-xl" style={{ background: 'rgba(255, 255, 255, 0.98)' }}>
+                  <div className="w-14 h-14 rounded-xl p-1.5 flex items-center justify-center shadow-lg ring-2 ring-white/20" style={{ background: 'rgba(255, 255, 255, 0.95)' }}>
                     <img 
                       src={companySettings.company_logo} 
                       alt={companySettings.company_name} 
@@ -76,8 +76,8 @@ export default function Layout({ children }) {
                     />
                   </div>
                 ) : (
-                  <div className="w-16 h-16 bg-[#FFD700] rounded-md flex items-center justify-center shadow-xl">
-                    <span className="text-3xl font-bold text-[#0B2B5C]">
+                  <div className="w-14 h-14 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-xl flex items-center justify-center shadow-lg ring-2 ring-white/20">
+                    <span className="text-2xl font-bold text-[#0B2B5C]">
                       {isAdmin ? 'A' : (companySettings?.company_name?.charAt(0) || 'S')}
                     </span>
                   </div>
@@ -99,7 +99,7 @@ export default function Layout({ children }) {
                     )}
                   </div>
                   <div className="flex items-center gap-2 mt-0.5">
-                    <Badge variant="secondary" className="bg-[#FFD700] text-[#0B2B5C] text-xs font-semibold px-2 py-0.5 hover:bg-[#FFD700]">
+                    <Badge variant="secondary" className="bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] text-xs font-semibold px-2 py-0.5 hover:from-[#FFD700] hover:to-[#FFA500] shadow-sm">
                       {isAdmin ? 'Admin Panel' : 'Invoice Manager'}
                     </Badge>
                     {!isAdmin && companySettings?.company_gst_no && (
@@ -111,17 +111,17 @@ export default function Layout({ children }) {
                 </div>
               </div>
               
-              <div className="hidden md:flex gap-2 ml-4">
+              <div className="hidden md:flex gap-1 ml-4 bg-white/5 p-1.5 rounded-xl backdrop-blur-sm">
                 {/* Admin Navigation - Only Admin Panel and Reports */}
                 {isAdmin ? (
                   <>
                     <button
                       onClick={() => navigate('/admin')}
                       data-testid="nav-admin-btn"
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                         location.pathname === '/admin' 
-                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
                       }`}
                     >
                       <Shield size={18} />
@@ -130,10 +130,10 @@ export default function Layout({ children }) {
                     <button
                       onClick={() => navigate('/admin/reports')}
                       data-testid="nav-admin-reports-btn"
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                         location.pathname === '/admin/reports' 
-                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
                       }`}
                     >
                       <BarChart3 size={18} />
@@ -141,15 +141,15 @@ export default function Layout({ children }) {
                     </button>
                   </>
                 ) : (
-                  /* Regular User Navigation */
+                  /* Regular User Navigation - Settings moved to last */
                   <>
                     <button
                       onClick={() => navigate('/')}
                       data-testid="nav-dashboard-btn"
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                         location.pathname === '/' 
-                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
                       }`}
                     >
                       <Home size={18} />
@@ -158,34 +158,34 @@ export default function Layout({ children }) {
                     <button
                       onClick={() => navigate('/invoices')}
                       data-testid="nav-invoices-btn"
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                         location.pathname === '/invoices' 
-                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
                       }`}
                     >
                       <FileText size={18} />
-                      All Invoices
+                      Invoices
                     </button>
                     <button
-                      onClick={() => navigate('/settings')}
-                      data-testid="nav-settings-btn"
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
-                        location.pathname === '/settings' 
-                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                      onClick={() => navigate('/manual-entry')}
+                      data-testid="nav-manual-entry-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
+                        location.pathname === '/manual-entry' 
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
                       }`}
                     >
-                      <SettingsIcon size={18} />
-                      Settings
+                      <PlusCircle size={18} />
+                      Manual Entry
                     </button>
                     <button
                       onClick={() => navigate('/reports')}
                       data-testid="nav-reports-btn"
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                         location.pathname === '/reports' 
-                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
                       }`}
                     >
                       <BarChart3 size={18} />
@@ -194,14 +194,26 @@ export default function Layout({ children }) {
                     <button
                       onClick={() => navigate('/bank-reconciliation')}
                       data-testid="nav-bank-btn"
-                      className={`flex items-center gap-2 px-4 py-2.5 rounded-sm text-sm font-medium transition-all duration-200 ${
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
                         location.pathname === '/bank-reconciliation' 
-                          ? 'bg-white/15 text-[#FFD700] shadow-md' 
-                          : 'text-white/80 hover:text-white hover:bg-white/10'
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
                       }`}
                     >
                       <CreditCard size={18} />
                       Bank Recon
+                    </button>
+                    <button
+                      onClick={() => navigate('/settings')}
+                      data-testid="nav-settings-btn"
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium transition-all duration-300 ${
+                        location.pathname === '/settings' 
+                          ? 'bg-gradient-to-r from-[#FFD700] to-[#FFA500] text-[#0B2B5C] shadow-lg transform scale-105' 
+                          : 'text-white/80 hover:text-white hover:bg-white/15'
+                      }`}
+                    >
+                      <SettingsIcon size={18} />
+                      Settings
                     </button>
                   </>
                 )}
@@ -210,12 +222,14 @@ export default function Layout({ children }) {
             <div className="flex items-center gap-3">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <button className="flex items-center gap-2 text-right mr-2 hover:bg-white/10 p-2 rounded-sm transition-all">
+                  <button className="flex items-center gap-2 text-right mr-2 hover:bg-white/10 p-2 rounded-lg transition-all border border-white/10">
                     <div>
                       <div className="text-sm font-medium text-white" data-testid="user-name-display">{user.name}</div>
                       <div className="text-[10px] text-white/60">{user.email}</div>
                     </div>
-                    <User size={16} className="text-white/70" />
+                    <div className="w-8 h-8 bg-gradient-to-br from-[#FFD700] to-[#FFA500] rounded-full flex items-center justify-center shadow-md">
+                      <User size={16} className="text-[#0B2B5C]" />
+                    </div>
                   </button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="w-48">
@@ -241,7 +255,7 @@ export default function Layout({ children }) {
                 variant="outline"
                 size="sm"
                 data-testid="logout-btn"
-                className="border-white/30 bg-white/10 text-white hover:bg-white/20 hover:text-white hover:border-white/50"
+                className="border-white/30 bg-white/10 text-white hover:bg-red-500/80 hover:text-white hover:border-red-500 transition-all duration-300"
               >
                 <LogOut size={16} className="mr-2" />
                 Logout
