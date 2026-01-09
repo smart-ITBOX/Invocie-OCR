@@ -333,14 +333,15 @@ async def validate_gst_number(user_id: str, invoice_type: str, extracted_data: I
         return True, ""
 
 async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: str = "purchase") -> tuple[InvoiceData, ConfidenceScores]:
-    """Extract invoice data using AI - Standalone version using OpenAI/Gemini SDKs"""
+    """Extract invoice data using AI - Supports Emergent, OpenAI, and Gemini"""
     try:
-        # Get API keys - try Google first (cheaper), then OpenAI
+        # Check for API keys - Emergent first, then standard keys
+        emergent_key = os.environ.get('EMERGENT_LLM_KEY')
         google_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
         openai_key = os.environ.get('OPENAI_API_KEY')
         
-        if not google_key and not openai_key:
-            raise ValueError("No LLM API key found. Set GOOGLE_API_KEY or OPENAI_API_KEY")
+        if not emergent_key and not google_key and not openai_key:
+            raise ValueError("No LLM API key found. Set EMERGENT_LLM_KEY, GOOGLE_API_KEY, or OPENAI_API_KEY")
 
         temp_file = f"/tmp/{uuid.uuid4()}_{filename}"
         with open(temp_file, "wb") as f:
@@ -416,8 +417,32 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
 
         response_text = None
         
-        # Try Gemini first (supports PDF natively and is cheaper)
-        if google_key and GEMINI_AVAILABLE:
+        # Method 1: Try Emergent integration first (if available)
+        if emergent_key and EMERGENT_AVAILABLE:
+            try:
+                chat = LlmChat(
+                    api_key=emergent_key,
+                    session_id=str(uuid.uuid4()),
+                    system_message=f"You are an expert invoice data extraction assistant. Extract structured data accurately. Return only valid JSON."
+                ).with_model("gemini", "gemini-2.5-flash")
+                
+                file_content = FileContentWithMimeType(
+                    file_path=temp_file,
+                    mime_type=mime_type
+                )
+                
+                user_message = UserMessage(
+                    text=prompt,
+                    file_contents=[file_content]
+                )
+                
+                response_text = await chat.send_message(user_message)
+                logging.info("Invoice extraction successful with Emergent/Gemini")
+            except Exception as e:
+                logging.warning(f"Emergent extraction failed: {str(e)}, trying standard SDKs...")
+        
+        # Method 2: Try standard Gemini SDK (supports PDF natively)
+        if response_text is None and google_key and GEMINI_AVAILABLE:
             try:
                 genai.configure(api_key=google_key)
                 model = genai.GenerativeModel("gemini-1.5-flash")
@@ -432,17 +457,16 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
                     response = model.generate_content([prompt, image])
                 
                 response_text = response.text
-                logging.info("Invoice extraction successful with Gemini")
+                logging.info("Invoice extraction successful with Gemini SDK")
             except Exception as e:
-                logging.warning(f"Gemini extraction failed: {str(e)}, trying OpenAI...")
+                logging.warning(f"Gemini SDK extraction failed: {str(e)}, trying OpenAI...")
         
-        # Fallback to OpenAI
+        # Method 3: Fallback to OpenAI SDK
         if response_text is None and openai_key and OPENAI_AVAILABLE:
             try:
                 client = AsyncOpenAI(api_key=openai_key)
                 
                 if mime_type == "application/pdf":
-                    # Extract text from PDF for OpenAI
                     reader = PdfReader(temp_file)
                     pdf_text = ""
                     for page in reader.pages:
@@ -458,7 +482,6 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
                     )
                     response_text = response.choices[0].message.content
                 else:
-                    # Image - encode as base64
                     with open(temp_file, "rb") as f:
                         base64_image = base64.b64encode(f.read()).decode("utf-8")
                     
@@ -476,9 +499,9 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
                     )
                     response_text = response.choices[0].message.content
                 
-                logging.info("Invoice extraction successful with OpenAI")
+                logging.info("Invoice extraction successful with OpenAI SDK")
             except Exception as e:
-                logging.error(f"OpenAI extraction failed: {str(e)}")
+                logging.error(f"OpenAI SDK extraction failed: {str(e)}")
         
         # Clean up temp file
         if os.path.exists(temp_file):
