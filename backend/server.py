@@ -1202,12 +1202,13 @@ async def upload_bank_statement(
     else:
         raise HTTPException(status_code=400, detail="Unsupported file format")
     
-    # Use AI to extract transactions - Standalone version using OpenAI/Gemini SDKs
+    # Use AI to extract transactions - Supports Emergent, OpenAI, and Gemini
+    emergent_key = os.environ.get('EMERGENT_LLM_KEY')
     google_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
     openai_key = os.environ.get('OPENAI_API_KEY')
     
-    if not google_key and not openai_key:
-        raise HTTPException(status_code=500, detail="No LLM API key configured. Set GOOGLE_API_KEY or OPENAI_API_KEY")
+    if not emergent_key and not google_key and not openai_key:
+        raise HTTPException(status_code=500, detail="No LLM API key configured. Set EMERGENT_LLM_KEY, GOOGLE_API_KEY, or OPENAI_API_KEY")
     
     extraction_prompt = """Analyze this bank statement and extract all transactions. 
 
@@ -1257,8 +1258,43 @@ IMPORTANT:
     last_error = None
     response_text = None
     
-    # Try Gemini first (cheaper)
-    if google_key and GEMINI_AVAILABLE:
+    # Method 1: Try Emergent integration first
+    if emergent_key and EMERGENT_AVAILABLE:
+        try:
+            chat = LlmChat(
+                api_key=emergent_key,
+                session_id=str(uuid.uuid4()),
+                system_message="You are an expert bank statement data extraction assistant. Return only valid JSON."
+            ).with_model("gemini", "gemini-2.5-flash")
+            
+            temp_file = f"/tmp/{uuid.uuid4()}_statement.txt"
+            with open(temp_file, "w") as f:
+                f.write(extracted_text)
+            
+            file_content = FileContentWithMimeType(
+                file_path=temp_file,
+                mime_type="text/plain"
+            )
+            
+            user_message = UserMessage(
+                text=extraction_prompt,
+                file_contents=[file_content]
+            )
+            
+            response_text = await chat.send_message(user_message)
+            
+            try:
+                os.remove(temp_file)
+            except:
+                pass
+            
+            logging.info("Bank statement extraction successful with Emergent/Gemini")
+        except Exception as e:
+            last_error = str(e)
+            logging.warning(f"Emergent extraction failed: {str(e)}, trying standard SDKs...")
+    
+    # Method 2: Try standard Gemini SDK
+    if response_text is None and google_key and GEMINI_AVAILABLE:
         try:
             genai.configure(api_key=google_key)
             model = genai.GenerativeModel("gemini-1.5-flash")
@@ -1266,12 +1302,12 @@ IMPORTANT:
             full_prompt = f"{extraction_prompt}\n\nBank Statement Data:\n{extracted_text[:50000]}"
             response = model.generate_content(full_prompt)
             response_text = response.text
-            logging.info("Bank statement extraction successful with Gemini")
+            logging.info("Bank statement extraction successful with Gemini SDK")
         except Exception as e:
             last_error = str(e)
-            logging.warning(f"Gemini extraction failed: {str(e)}, trying OpenAI...")
+            logging.warning(f"Gemini SDK extraction failed: {str(e)}, trying OpenAI...")
     
-    # Fallback to OpenAI
+    # Method 3: Fallback to OpenAI SDK
     if response_text is None and openai_key and OPENAI_AVAILABLE:
         try:
             client = AsyncOpenAI(api_key=openai_key)
@@ -1286,10 +1322,10 @@ IMPORTANT:
                 temperature=0.1
             )
             response_text = response.choices[0].message.content
-            logging.info("Bank statement extraction successful with OpenAI")
+            logging.info("Bank statement extraction successful with OpenAI SDK")
         except Exception as e:
             last_error = str(e)
-            logging.error(f"OpenAI extraction failed: {str(e)}")
+            logging.error(f"OpenAI SDK extraction failed: {str(e)}")
     
     if response_text is None:
         raise HTTPException(status_code=500, detail=f"All AI models failed. Last error: {last_error}")
