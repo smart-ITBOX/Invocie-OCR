@@ -324,17 +324,14 @@ async def validate_gst_number(user_id: str, invoice_type: str, extracted_data: I
         return True, ""
 
 async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: str = "purchase") -> tuple[InvoiceData, ConfidenceScores]:
-    """Extract invoice data using AI"""
+    """Extract invoice data using AI - Standalone version using OpenAI/Gemini SDKs"""
     try:
-        llm_key = os.environ.get('EMERGENT_LLM_KEY')
-        if not llm_key:
-            raise ValueError("EMERGENT_LLM_KEY not found")
-
-        chat = LlmChat(
-            api_key=llm_key,
-            session_id=str(uuid.uuid4()),
-            system_message=f"You are an expert invoice data extraction assistant for {'purchase' if invoice_type == 'purchase' else 'sales'} invoices. Extract structured data accurately."
-        ).with_model("gemini", "gemini-2.5-flash")
+        # Get API keys - try Google first (cheaper), then OpenAI
+        google_key = os.environ.get('GOOGLE_API_KEY') or os.environ.get('GEMINI_API_KEY')
+        openai_key = os.environ.get('OPENAI_API_KEY')
+        
+        if not google_key and not openai_key:
+            raise ValueError("No LLM API key found. Set GOOGLE_API_KEY or OPENAI_API_KEY")
 
         temp_file = f"/tmp/{uuid.uuid4()}_{filename}"
         with open(temp_file, "wb") as f:
@@ -349,11 +346,6 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
         else:
             mime_type = "application/octet-stream"
 
-        file_content = FileContentWithMimeType(
-            file_path=temp_file,
-            mime_type=mime_type
-        )
-
         if invoice_type == "purchase":
             prompt = """Extract the following information from this PURCHASE invoice:
             
@@ -366,85 +358,128 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
             - Supplier Name
             - Supplier Address
             - Supplier GST No
-            - Supplier Contact Person (if available)
-            - Supplier Contact Number (if available)
             
-            **BILL TO / BUYER DETAILS (Who is purchasing - the company receiving the invoice):**
+            **BILL TO / BUYER DETAILS (Who is purchasing):**
             - Buyer Name
             - Buyer Address
-            - Buyer GST No (CRITICAL - this should be the purchasing company's GST)
-            - Buyer Contact Person (if available)
-            - Buyer Contact Number (if available)
+            - Buyer GST No
             
             **AMOUNTS:**
             - Basic Amount (taxable amount before GST)
             - GST Amount (total GST)
             - Total Amount (final payable amount)
-            - GST Rate (percentage like 5, 12, 18, 28)
-            - If GST is split, extract: CGST, SGST, IGST amounts
             
-            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name, supplier_address, supplier_gst_no, supplier_contact_person, supplier_contact_number, buyer_name, buyer_address, buyer_gst_no, buyer_contact_person, buyer_contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
-            Also include a confidence score (0-100) for each field.
-            
-            Format:
+            Respond in JSON format:
             {
-                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", "supplier_name": "...", "buyer_name": "...", ...},
+                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", "supplier_name": "...", "supplier_address": "...", "supplier_gst_no": "...", "buyer_name": "...", "buyer_address": "...", "buyer_gst_no": "...", "basic_amount": 0, "gst": 0, "total_amount": 0},
                 "confidence": {"invoice_no": 95, ...}
             }
             """
         else:
             prompt = """Extract the following information from this SALES invoice:
             
-            CRITICAL: Extract BOTH supplier (Bill From - your company) and buyer (Bill To - customer) details.
+            CRITICAL: Extract BOTH supplier (Bill From) and buyer (Bill To) details.
             
             - Invoice No
             - Invoice Date (in DD/MM/YYYY format)
             
-            **BILL FROM / SUPPLIER DETAILS (Your company - who is selling):**
-            - Supplier Name (your company name)
+            **BILL FROM / SUPPLIER DETAILS (Your company):**
+            - Supplier Name
             - Supplier Address
-            - Supplier GST No (CRITICAL - this should be your company's GST)
-            - Supplier Contact Person (if available)
-            - Supplier Contact Number (if available)
+            - Supplier GST No
             
-            **BILL TO / BUYER/CUSTOMER DETAILS (Who is purchasing):**
-            - Buyer Name (customer name)
+            **BILL TO / BUYER DETAILS (Customer):**
+            - Buyer Name
             - Buyer Address
             - Buyer GST No
-            - Buyer Contact Person (if available)
-            - Buyer Contact Number (if available)
             
             **AMOUNTS:**
             - Basic Amount (taxable amount before GST)
             - GST Amount (total GST)
             - Total Amount (final receivable amount)
-            - GST Rate (percentage like 5, 12, 18, 28)
-            - If GST is split, extract: CGST, SGST, IGST amounts
             
-            Respond in JSON format with keys: invoice_no, invoice_date, supplier_name, supplier_address, supplier_gst_no, supplier_contact_person, supplier_contact_number, buyer_name, buyer_address, buyer_gst_no, buyer_contact_person, buyer_contact_number, basic_amount, gst, total_amount, gst_rate, cgst, sgst, igst.
-            Also include a confidence score (0-100) for each field.
-            
-            Format:
+            Respond in JSON format:
             {
-                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", "supplier_name": "...", "buyer_name": "...", ...},
+                "data": {"invoice_no": "...", "invoice_date": "DD/MM/YYYY", "supplier_name": "...", "supplier_address": "...", "supplier_gst_no": "...", "buyer_name": "...", "buyer_address": "...", "buyer_gst_no": "...", "basic_amount": 0, "gst": 0, "total_amount": 0},
                 "confidence": {"invoice_no": 95, ...}
             }
             """
 
-        user_message = UserMessage(
-            text=prompt,
-            file_contents=[file_content]
-        )
-
-        response = await chat.send_message(user_message)
+        response_text = None
         
+        # Try Gemini first (supports PDF natively and is cheaper)
+        if google_key and GEMINI_AVAILABLE:
+            try:
+                genai.configure(api_key=google_key)
+                model = genai.GenerativeModel("gemini-1.5-flash")
+                
+                if mime_type == "application/pdf":
+                    uploaded_file = genai.upload_file(temp_file, mime_type=mime_type)
+                    response = model.generate_content([prompt, uploaded_file])
+                    genai.delete_file(uploaded_file.name)
+                else:
+                    import PIL.Image
+                    image = PIL.Image.open(temp_file)
+                    response = model.generate_content([prompt, image])
+                
+                response_text = response.text
+                logging.info("Invoice extraction successful with Gemini")
+            except Exception as e:
+                logging.warning(f"Gemini extraction failed: {str(e)}, trying OpenAI...")
+        
+        # Fallback to OpenAI
+        if response_text is None and openai_key and OPENAI_AVAILABLE:
+            try:
+                client = AsyncOpenAI(api_key=openai_key)
+                
+                if mime_type == "application/pdf":
+                    # Extract text from PDF for OpenAI
+                    reader = PdfReader(temp_file)
+                    pdf_text = ""
+                    for page in reader.pages:
+                        pdf_text += page.extract_text() or ""
+                    
+                    response = await client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": "You are an expert invoice data extraction assistant. Return only valid JSON."},
+                            {"role": "user", "content": f"{prompt}\n\nInvoice Text:\n{pdf_text}"}
+                        ],
+                        temperature=0.1
+                    )
+                    response_text = response.choices[0].message.content
+                else:
+                    # Image - encode as base64
+                    with open(temp_file, "rb") as f:
+                        base64_image = base64.b64encode(f.read()).decode("utf-8")
+                    
+                    response = await client.chat.completions.create(
+                        model="gpt-4o",
+                        messages=[
+                            {"role": "system", "content": "You are an expert invoice data extraction assistant. Return only valid JSON."},
+                            {"role": "user", "content": [
+                                {"type": "text", "text": prompt},
+                                {"type": "image_url", "image_url": {"url": f"data:{mime_type};base64,{base64_image}"}}
+                            ]}
+                        ],
+                        temperature=0.1,
+                        max_tokens=4096
+                    )
+                    response_text = response.choices[0].message.content
+                
+                logging.info("Invoice extraction successful with OpenAI")
+            except Exception as e:
+                logging.error(f"OpenAI extraction failed: {str(e)}")
+        
+        # Clean up temp file
         if os.path.exists(temp_file):
             os.remove(temp_file)
-
-        import json
-        import re
-        response_text = response.strip()
         
+        if response_text is None:
+            raise ValueError("All AI models failed to extract invoice data")
+
+        # Parse JSON response
+        response_text = response_text.strip()
         if "```json" in response_text:
             response_text = response_text.split("```json")[1].split("```")[0].strip()
         elif "```" in response_text:
@@ -475,7 +510,8 @@ async def extract_invoice_data(file_data: bytes, filename: str, invoice_type: st
 
     except Exception as e:
         logging.error(f"Error extracting invoice data: {str(e)}")
-        logging.error(f"Response was: {response if 'response' in locals() else 'No response'}")
+        if 'temp_file' in locals() and os.path.exists(temp_file):
+            os.remove(temp_file)
         return InvoiceData(), ConfidenceScores(
             invoice_no=0.5, invoice_date=0.5, supplier_name=0.5, address=0.5,
             gst_no=0.5, basic_amount=0.5, gst=0.5, total_amount=0.5
